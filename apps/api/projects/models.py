@@ -1,3 +1,94 @@
 from django.db import models
+from django.contrib.auth import get_user_model
 
-# Create your models here.
+User = get_user_model()
+
+
+class Project(models.Model):
+    class Type(models.TextChoices):
+        FEATURE = 'FEATURE', 'Feature Film'
+        TV_SERIES = 'TV_SERIES', 'TV Series'
+        DOCUMENTARY = 'DOCUMENTARY', 'Documentary'
+        COMMERCIAL = 'COMMERCIAL', 'Commercial'
+
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Draft'
+        UPLOADED = 'UPLOADED', 'Budget Uploaded'
+        ANALYZING = 'ANALYZING', 'Analyzing'
+        REVIEW = 'REVIEW', 'In Review'
+        COMPLETE = 'COMPLETE', 'Complete'
+        ARCHIVED = 'ARCHIVED', 'Archived'
+
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True)
+    producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
+    type = models.CharField(max_length=20, choices=Type.choices)
+    genre = models.CharField(max_length=100, blank=True)
+    language = models.CharField(max_length=50, default='English')
+    synopsis = models.TextField(blank=True)
+    total_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=3, default='USD')
+    shoot_start_date = models.DateField(null=True, blank=True)
+    shoot_end_date = models.DateField(null=True, blank=True)
+    shoot_duration_days = models.IntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'projects'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class Budget(models.Model):
+    class FileType(models.TextChoices):
+        PDF = 'PDF', 'PDF'
+        CSV = 'CSV', 'CSV'
+        XLSX = 'XLSX', 'Excel'
+
+    class ExtractionStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        PROCESSING = 'PROCESSING', 'Processing'
+        EXTRACTED = 'EXTRACTED', 'Extracted'
+        FAILED = 'FAILED', 'Failed'
+        MANUAL_REVIEW = 'MANUAL_REVIEW', 'Manual Review Required'
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='budgets')
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10, choices=FileType.choices)
+    file = models.FileField(upload_to='budgets/%Y/%m/')
+    extraction_status = models.CharField(
+        max_length=20, choices=ExtractionStatus.choices, default=ExtractionStatus.PENDING
+    )
+    extracted_data = models.JSONField(default=dict, blank=True)
+    confidence_score = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    extracted_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_budgets'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'budgets'
+        ordering = ['-created_at']
+
+
+class BudgetLineItem(models.Model):
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='line_items')
+    account_code = models.CharField(max_length=50, blank=True)
+    description = models.CharField(max_length=500)
+    category = models.CharField(max_length=100, blank=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    currency = models.CharField(max_length=3, default='USD')
+    is_above_the_line = models.BooleanField(default=False)
+    is_local_eligible = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    sort_order = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'budget_line_items'
+        ordering = ['sort_order', 'id']
