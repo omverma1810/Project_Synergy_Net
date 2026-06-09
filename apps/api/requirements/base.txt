@@ -1,0 +1,15 @@
+Django>=5.0,<5.1
+djangorestframework>=3.14
+djangorestframework-simplejwt>=5.3
+celery>=5.3
+redis>=5.0
+psycopg2-binary>=2.9
+python-decouple>=3.8
+django-cors-headers>=4.3
+Pillow>=10.0
+pandas>=2.0
+openpyxl>=3.1
+pdfplumber>=0.10
+PyMuPDF>=1.23
+WeasyPrint>=60.0
+python-magic>=0.4
