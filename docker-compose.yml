@@ -23,46 +23,83 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   api:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: synergy-api
-    command: python manage.py runserver 0.0.0.0:8000
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py seed_demo &&
+             python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./apps/api:/app
-      - ./media:/app/media
+      - media_data:/app/media
     ports:
       - "8000:8000"
     environment:
       - DEBUG=True
-      - DATABASE_URL=postgres://synergy_user:synergy_pass@postgres:5432/synergy_db
-      - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=dev-secret-key-change-in-production
+      - DB_NAME=synergy_db
+      - DB_USER=synergy_user
+      - DB_PASSWORD=synergy_pass
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+
+  celery:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: synergy-celery
+    command: celery -A synergy worker -l info -c 2
+    volumes:
+      - ./apps/api:/app
+      - media_data:/app/media
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - DB_NAME=synergy_db
+      - DB_USER=synergy_user
+      - DB_PASSWORD=synergy_pass
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
     container_name: synergy-web
-    command: pnpm dev
     volumes:
       - ./apps/web:/app
       - /app/node_modules
+      - /app/.next
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - API_URL=http://api:8000
     depends_on:
       - api
 
 volumes:
   postgres_data:
   redis_data:
+  media_data:
