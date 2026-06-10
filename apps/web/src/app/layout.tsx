@@ -1,22 +1,10 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import Layout from "@/components/Layout";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
-
 export const metadata: Metadata = {
-  title: "Synergy Net — Production Finance Intelligence",
-  description: "Analyse film production incentives and rank territories by net benefit.",
+  title: "Synergy Net - Production Finance Intelligence",
+  description: "Automated rebate matching and budget spend projections for film producers",
 };
 
 export default function RootLayout({
@@ -26,9 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-synergy-dark text-synergy-text`}
-      >
+      <body>
         <Layout>{children}</Layout>
       </body>
     </html>
