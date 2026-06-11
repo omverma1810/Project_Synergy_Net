@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 
 const schema = z.object({
   first_name: z.string().min(1, 'First name is required'),
@@ -33,40 +34,21 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/register/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          company_name: data.company_name,
-          password: data.password,
-        }),
+      await api.auth.register({
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        company_name: data.company_name,
+        password: data.password,
       });
-      const json = await res.json();
-      if (!res.ok) {
-        const msg = json.email?.[0] || json.detail || Object.values(json)[0]?.[0] || 'Registration failed';
-        setError(msg);
-        return;
-      }
       // Auto-login after register
-      const loginRes = await fetch('/api/auth/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      });
-      if (loginRes.ok) {
-        const tokens = await loginRes.json();
-        localStorage.setItem('auth_token', tokens.access);
-        localStorage.setItem('refresh_token', tokens.refresh);
-        document.cookie = `auth_token=${tokens.access}; path=/; SameSite=Lax`;
-        router.push('/');
-      } else {
-        router.push('/login');
-      }
-    } catch {
-      setError('Network error. Please try again.');
+      const tokens = await api.auth.login(data.email, data.password);
+      localStorage.setItem('auth_token', tokens.access);
+      localStorage.setItem('refresh_token', tokens.refresh);
+      document.cookie = `auth_token=${tokens.access}; path=/; SameSite=Lax`;
+      router.push('/');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,6 @@
 import io
 from django.template.loader import render_to_string
 from django.conf import settings
-from weasyprint import HTML
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 
@@ -18,6 +17,12 @@ class PDFReportGenerator:
             'analysis': self.analysis,
             'results': self.results,
         })
+        try:
+            from weasyprint import HTML
+        except ImportError as exc:
+            raise RuntimeError(
+                'PDF report generation requires WeasyPrint and its native system dependencies.'
+            ) from exc
         pdf = HTML(string=html_string, base_url=str(settings.BASE_DIR)).write_pdf()
         return pdf
 
