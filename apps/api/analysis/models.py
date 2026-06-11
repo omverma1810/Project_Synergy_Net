@@ -30,6 +30,11 @@ class Analysis(models.Model):
 
 
 class AnalysisResult(models.Model):
+    class RecoupmentPriority(models.TextChoices):
+        FIRST = 'first', 'First Position'
+        SHARED = 'shared', 'Shared'
+        LAST = 'last', 'Last Position'
+
     analysis = models.ForeignKey(Analysis, on_delete=models.CASCADE, related_name='results')
     territory = models.ForeignKey('territories.Territory', on_delete=models.CASCADE)
     rank = models.IntegerField()
@@ -42,6 +47,15 @@ class AnalysisResult(models.Model):
     confidence_score = models.DecimalField(max_digits=3, decimal_places=2)
     currency = models.CharField(max_length=3, default='USD')
     details = models.JSONField(default=dict)
+
+    # Financing & recoupment
+    rebate_timing_months = models.IntegerField(default=12)
+    loan_against_rebate_available = models.BooleanField(default=False)
+    financing_benefit_estimate = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    recoupment_priority = models.CharField(
+        max_length=10, choices=RecoupmentPriority.choices, default=RecoupmentPriority.SHARED
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

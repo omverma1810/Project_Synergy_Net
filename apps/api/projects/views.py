@@ -1,5 +1,9 @@
-from rest_framework import generics, permissions, parsers
+from decimal import Decimal
+from rest_framework import generics, permissions, parsers, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.text import slugify
 from .models import Project, Budget, BudgetLineItem
 from .serializers import (
@@ -9,6 +13,32 @@ from .serializers import (
     BudgetLineItemSerializer,
 )
 from .tasks import extract_budget_data
+
+
+def _auto_populate_from_spend_estimates(project):
+    """Create a synthetic budget + BudgetLineItems from project.spend_estimates."""
+    estimates = project.spend_estimates
+    if not estimates:
+        return None
+    budget = Budget.objects.create(
+        project=project,
+        file_name='spend_estimates_auto',
+        file_type=Budget.FileType.CSV,
+        extraction_status=Budget.ExtractionStatus.EXTRACTED,
+        confidence_score=Decimal('0.50'),
+        extracted_at=timezone.now(),
+    )
+    for idx, (category, amount) in enumerate(estimates.items()):
+        BudgetLineItem.objects.create(
+            budget=budget,
+            description=category,
+            category=category,
+            amount=Decimal(str(amount)),
+            currency=project.currency,
+            is_local_eligible=True,
+            sort_order=idx,
+        )
+    return budget
 
 
 class ProjectListCreateView(generics.ListCreateAPIView):
@@ -25,7 +55,12 @@ class ProjectListCreateView(generics.ListCreateAPIView):
         while Project.objects.filter(slug=slug).exists():
             slug = f"{base_slug}-{counter}"
             counter += 1
-        serializer.save(producer=self.request.user, slug=slug)
+        project = serializer.save(producer=self.request.user, slug=slug)
+        # Auto-create budget from spend_estimates if no file provided
+        if project.spend_estimates and not project.budgets.exists():
+            _auto_populate_from_spend_estimates(project)
+            project.status = Project.Status.UPLOADED
+            project.save(update_fields=['status'])
 
 
 class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -35,6 +70,25 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Project.objects.filter(producer=self.request.user)
+
+
+class ProjectVettingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not request.user.is_staff:
+            return Response({'detail': 'Staff only.'}, status=status.HTTP_403_FORBIDDEN)
+        project = get_object_or_404(Project, pk=pk)
+        vetting_status = request.data.get('vetting_status')
+        vetting_notes = request.data.get('vetting_notes', '')
+        if vetting_status not in [c[0] for c in Project.VettingStatus.choices]:
+            return Response({'detail': 'Invalid vetting_status.'}, status=status.HTTP_400_BAD_REQUEST)
+        project.vetting_status = vetting_status
+        project.vetting_notes = vetting_notes
+        project.vetting_reviewed_by = request.user
+        project.vetting_reviewed_at = timezone.now()
+        project.save(update_fields=['vetting_status', 'vetting_notes', 'vetting_reviewed_by', 'vetting_reviewed_at'])
+        return Response(ProjectDetailSerializer(project).data)
 
 
 class BudgetUploadView(generics.CreateAPIView):

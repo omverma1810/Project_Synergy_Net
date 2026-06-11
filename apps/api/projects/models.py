@@ -19,6 +19,12 @@ class Project(models.Model):
         COMPLETE = 'COMPLETE', 'Complete'
         ARCHIVED = 'ARCHIVED', 'Archived'
 
+    class VettingStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending Review'
+        FLAGGED = 'FLAGGED', 'Flagged for Review'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
     producer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
@@ -32,6 +38,24 @@ class Project(models.Model):
     shoot_end_date = models.DateField(null=True, blank=True)
     shoot_duration_days = models.IntegerField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+
+    # Producer intake fields
+    script_file = models.FileField(upload_to='scripts/%Y/%m/', blank=True, null=True)
+    shooting_plan_file = models.FileField(upload_to='shooting_plans/%Y/%m/', blank=True, null=True)
+    cast_crew_info = models.JSONField(default=dict, blank=True)
+    spend_estimates = models.JSONField(default=dict, blank=True)
+    production_timeline = models.JSONField(default=dict, blank=True)
+
+    # Vetting workflow
+    vetting_status = models.CharField(
+        max_length=20, choices=VettingStatus.choices, default=VettingStatus.PENDING
+    )
+    vetting_notes = models.TextField(blank=True)
+    vetting_reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='vetted_projects'
+    )
+    vetting_reviewed_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

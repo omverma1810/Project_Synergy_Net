@@ -8,14 +8,20 @@ class AnalysisResultSerializer(serializers.ModelSerializer):
     territory_percentage = serializers.DecimalField(
         source='territory.base_percentage', max_digits=5, decimal_places=2, read_only=True
     )
+    territory_region = serializers.CharField(source='territory.region', read_only=True)
+    territory_incentive_type = serializers.CharField(source='territory.incentive_type', read_only=True)
 
     class Meta:
         model = AnalysisResult
         fields = [
             'id', 'territory', 'territory_name', 'territory_country', 'territory_percentage',
+            'territory_region', 'territory_incentive_type',
             'rank', 'qualified_spend_total', 'estimated_rebate', 'estimated_rebate_pct',
             'logistics_premium', 'net_benefit', 'payback_timeline_months',
-            'confidence_score', 'currency', 'details', 'created_at',
+            'confidence_score', 'currency',
+            'rebate_timing_months', 'loan_against_rebate_available',
+            'financing_benefit_estimate', 'recoupment_priority',
+            'details', 'created_at',
         ]
 
 
