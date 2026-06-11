@@ -30,8 +30,10 @@ class ProjectListSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             'id', 'title', 'slug', 'type', 'genre', 'total_budget',
-            'currency', 'status', 'budget_count', 'latest_analysis_status', 'created_at',
+            'currency', 'status', 'spend_estimates', 'budget_count',
+            'latest_analysis_status', 'created_at',
         ]
+        read_only_fields = ['id', 'slug', 'budget_count', 'latest_analysis_status', 'created_at']
 
     def get_latest_analysis_status(self, obj):
         latest = obj.analyses.order_by('-created_at').first()

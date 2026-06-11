@@ -25,7 +25,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
-    password_confirm = serializers.CharField(write_only=True)
+    password_confirm = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    username = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -33,12 +34,20 @@ class RegisterSerializer(serializers.ModelSerializer):
                   'password_confirm', 'role', 'company_name', 'country']
 
     def validate(self, data):
-        if data['password'] != data['password_confirm']:
+        password_confirm = data.pop('password_confirm', None)
+        if password_confirm and data['password'] != password_confirm:
             raise serializers.ValidationError("Passwords do not match.")
+        if not data.get('username'):
+            base = data['email'].split('@')[0]
+            username = base
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base}{counter}"
+                counter += 1
+            data['username'] = username
         return data
 
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
         user = User.objects.create_user(**validated_data)
         Profile.objects.get_or_create(user=user)
         return user

@@ -1,18 +1,309 @@
 'use client';
-import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { CheckIcon, ChevronRightIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
+import { api } from '@/lib/api';
+import Layout from '@/components/Layout';
+
+const step1Schema = z.object({
+  title: z.string().min(2, 'Title required'),
+  type: z.enum(['FEATURE', 'TV_SERIES', 'DOCUMENTARY', 'COMMERCIAL']),
+  genre: z.string().min(1, 'Genre required'),
+  language: z.string().min(1, 'Language required'),
+  synopsis: z.string().optional(),
+  total_budget: z.string().min(1, 'Budget required'),
+  currency: z.string().length(3),
+  shoot_start_date: z.string().optional(),
+  shoot_end_date: z.string().optional(),
+  shoot_duration_days: z.string().optional(),
+});
+type Step1Data = z.infer<typeof step1Schema>;
+
+interface SpendRow { category: string; amount: string; }
+
+const STEPS = ['Basic Info', 'Spend Estimates', 'Files & Submit'];
+
+const slideVariants = {
+  enter: (dir: number) => ({ x: dir * 40, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir: number) => ({ x: dir * -40, opacity: 0 }),
+};
+
+const DEFAULT_ESTIMATES: SpendRow[] = [
+  { category: 'Local Crew', amount: '' },
+  { category: 'Equipment Rental', amount: '' },
+  { category: 'Location Fees', amount: '' },
+  { category: 'Post Production', amount: '' },
+  { category: 'Set Construction', amount: '' },
+];
 
 export default function NewProjectPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(0);
+  const [dir, setDir] = useState(1);
+  const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
+  const [estimates, setEstimates] = useState<SpendRow[]>(DEFAULT_ESTIMATES);
+  const [budgetFile, setBudgetFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const { register, handleSubmit, formState: { errors } } = useForm<Step1Data>({
+    resolver: zodResolver(step1Schema),
+    defaultValues: { currency: 'USD', language: 'English', type: 'FEATURE', genre: 'drama' },
+  });
+
+  const next = (data?: Step1Data) => {
+    if (data) setStep1Data(data);
+    setDir(1);
+    setStep(s => s + 1);
+  };
+  const back = () => { setDir(-1); setStep(s => s - 1); };
+
+  const handleFinalSubmit = async () => {
+    if (!step1Data) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const spend_estimates = estimates.reduce<Record<string, number>>((acc, e) => {
+        if (e.category && e.amount) acc[e.category] = parseFloat(e.amount) || 0;
+        return acc;
+      }, {});
+
+      const project = await api.projects.createJson({
+        title: step1Data.title,
+        type: step1Data.type,
+        genre: step1Data.genre.toLowerCase(),
+        language: step1Data.language,
+        synopsis: step1Data.synopsis || '',
+        total_budget: step1Data.total_budget,
+        currency: step1Data.currency,
+        shoot_start_date: step1Data.shoot_start_date || null,
+        shoot_end_date: step1Data.shoot_end_date || null,
+        shoot_duration_days: step1Data.shoot_duration_days ? parseInt(step1Data.shoot_duration_days) : null,
+        spend_estimates,
+      });
+
+      if (budgetFile) {
+        await api.projects.uploadBudget(project.id, budgetFile).catch(() => {});
+      }
+      router.push(`/projects/${project.id}`);
+    } catch (e: unknown) {
+      setError((e as Error).message || 'Failed to create project');
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-synergy-text">New Project</h1>
-        <p className="text-synergy-muted mt-1">
-          Project creation form — coming soon.{' '}
-          <Link href="/projects" className="text-synergy-cyan hover:underline">
-            Back to projects
-          </Link>
-        </p>
+    <Layout>
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8">
+          <h1 className="page-title">New Project</h1>
+          <p className="text-synergy-muted text-sm mt-1">Set up your production for territory analysis</p>
+        </div>
+
+        {/* Steps */}
+        <div className="flex items-center mb-10 gap-0">
+          {STEPS.map((label, i) => (
+            <div key={i} className="flex items-center flex-1 last:flex-none">
+              <div className="flex flex-col items-center shrink-0">
+                <div className={[
+                  'h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300',
+                  i < step ? 'bg-synergy-green text-white' :
+                  i === step ? 'bg-synergy-cyan text-synergy-dark' :
+                  'bg-synergy-card border border-synergy-border text-synergy-muted',
+                ].join(' ')}>
+                  {i < step ? <CheckIcon className="h-4 w-4" /> : i + 1}
+                </div>
+                <span className={`text-xs mt-1 whitespace-nowrap ${i === step ? 'text-synergy-cyan' : 'text-synergy-muted'}`}>{label}</span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div className={`h-px flex-1 mx-3 mb-4 transition-colors duration-300 ${i < step ? 'bg-synergy-green' : 'bg-synergy-border'}`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="overflow-hidden">
+          <AnimatePresence mode="wait" custom={dir}>
+            {step === 0 && (
+              <motion.form
+                key="s1"
+                custom={dir}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.22 }}
+                onSubmit={handleSubmit(next)}
+                className="glass-card p-6 space-y-4"
+              >
+                <div>
+                  <label className="form-label">Project Title *</label>
+                  <input {...register('title')} placeholder="Desert Wind" className="form-input" />
+                  {errors.title && <p className="mt-1 text-xs text-synergy-red">{errors.title.message}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label">Type *</label>
+                    <select {...register('type')} className="form-select">
+                      <option value="FEATURE">Feature Film</option>
+                      <option value="TV_SERIES">TV Series</option>
+                      <option value="DOCUMENTARY">Documentary</option>
+                      <option value="COMMERCIAL">Commercial</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Genre *</label>
+                    <select {...register('genre')} className="form-select">
+                      {['action', 'animation', 'comedy', 'documentary', 'drama', 'horror', 'sci_fi', 'streaming', 'thriller'].map(g => (
+                        <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1).replace('_', '-')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label">Language</label>
+                    <input {...register('language')} placeholder="English" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label">Currency</label>
+                    <select {...register('currency')} className="form-select">
+                      {['USD', 'EUR', 'GBP', 'AUD', 'CAD'].map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Total Budget *</label>
+                  <input {...register('total_budget')} type="number" placeholder="2500000" className="form-input" />
+                  {errors.total_budget && <p className="mt-1 text-xs text-synergy-red">{errors.total_budget.message}</p>}
+                </div>
+                <div>
+                  <label className="form-label">Synopsis</label>
+                  <textarea {...register('synopsis')} rows={3} placeholder="Brief description…" className="form-input resize-none" />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="form-label">Shoot Start</label>
+                    <input {...register('shoot_start_date')} type="date" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label">Shoot End</label>
+                    <input {...register('shoot_end_date')} type="date" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label">Days</label>
+                    <input {...register('shoot_duration_days')} type="number" placeholder="45" className="form-input" />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <button type="submit" className="btn-primary flex items-center gap-2">
+                    Continue <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.form>
+            )}
+
+            {step === 1 && (
+              <motion.div
+                key="s2"
+                custom={dir}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.22 }}
+                className="glass-card p-6"
+              >
+                <p className="text-sm text-synergy-muted mb-4">
+                  Enter estimated spend per category. This powers instant analysis without a budget file.
+                </p>
+                <div className="space-y-2 mb-4">
+                  {estimates.map((est, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input
+                        value={est.category}
+                        onChange={e => setEstimates(prev => prev.map((r, j) => j === i ? { ...r, category: e.target.value } : r))}
+                        placeholder="Category"
+                        className="form-input flex-1"
+                      />
+                      <input
+                        value={est.amount}
+                        onChange={e => setEstimates(prev => prev.map((r, j) => j === i ? { ...r, amount: e.target.value } : r))}
+                        type="number"
+                        placeholder="Amount"
+                        className="form-input w-36"
+                      />
+                      <button onClick={() => setEstimates(prev => prev.filter((_, j) => j !== i))}
+                        className="text-synergy-muted hover:text-synergy-red transition-colors text-xl leading-none w-6">×</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setEstimates(prev => [...prev, { category: '', amount: '' }])}
+                  className="btn-secondary text-xs mb-6">
+                  + Add Row
+                </button>
+                <div className="flex justify-between">
+                  <button onClick={back} className="btn-secondary flex items-center gap-2">
+                    <ChevronLeftIcon className="h-4 w-4" /> Back
+                  </button>
+                  <button onClick={() => next()} className="btn-primary flex items-center gap-2">
+                    Continue <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div
+                key="s3"
+                custom={dir}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.22 }}
+                className="glass-card p-6 space-y-5"
+              >
+                <div>
+                  <label className="form-label">Budget File (PDF / CSV / XLSX)</label>
+                  <input type="file" accept=".pdf,.csv,.xlsx"
+                    onChange={e => setBudgetFile(e.target.files?.[0] || null)}
+                    className="form-input cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-synergy-cyan/20 file:text-synergy-cyan file:text-xs"
+                  />
+                  <p className="text-xs text-synergy-muted mt-1">Optional if spend estimates are provided</p>
+                </div>
+
+                {error && (
+                  <div className="rounded-lg bg-synergy-red/10 border border-synergy-red/20 px-3 py-2 text-sm text-synergy-red">{error}</div>
+                )}
+
+                <div className="flex justify-between pt-2">
+                  <button onClick={back} className="btn-secondary flex items-center gap-2">
+                    <ChevronLeftIcon className="h-4 w-4" /> Back
+                  </button>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleFinalSubmit}
+                    disabled={submitting}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    {submitting ? (
+                      <><span className="h-4 w-4 border-2 border-synergy-dark/30 border-t-synergy-dark rounded-full animate-spin" /> Creating…</>
+                    ) : (
+                      <><CheckIcon className="h-4 w-4" /> Create Project</>
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }

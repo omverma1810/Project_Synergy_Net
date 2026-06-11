@@ -10,10 +10,146 @@
 body {
   color: var(--foreground);
   background: var(--background);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-synergy-card/80 backdrop-blur-xl border border-synergy-border/50 rounded-2xl;
+  }
+
+  .glass-card-light {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-xl;
+  }
+
+  .glass-card-cyan {
+    @apply bg-synergy-card/80 backdrop-blur-xl border border-synergy-cyan/20 rounded-2xl;
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .stat-card {
+    @apply glass-card p-6 hover:border-synergy-cyan/30 transition-all duration-300;
+  }
+
+  .btn-primary {
+    @apply bg-synergy-cyan text-synergy-dark font-semibold px-4 py-2 rounded-lg
+           hover:bg-cyan-400 transition-all duration-200 active:scale-95 text-sm;
+  }
+
+  .btn-secondary {
+    @apply glass-card-light text-synergy-text font-medium px-4 py-2 rounded-lg
+           hover:bg-white/10 transition-all duration-200 active:scale-95 text-sm;
+  }
+
+  .btn-danger {
+    @apply bg-synergy-red/10 text-synergy-red border border-synergy-red/30 font-medium px-4 py-2
+           rounded-lg hover:bg-synergy-red/20 transition-all duration-200 active:scale-95 text-sm;
+  }
+
+  .form-input {
+    @apply bg-white/5 border border-synergy-border text-synergy-text placeholder-synergy-muted
+           rounded-lg px-3 py-2 text-sm w-full
+           focus:outline-none focus:border-synergy-cyan focus:ring-1 focus:ring-synergy-cyan/50
+           transition-all duration-200;
+  }
+
+  .form-select {
+    @apply form-input cursor-pointer;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-synergy-muted mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-synergy-green/10 text-synergy-green border border-synergy-green/20;
+  }
+
+  .badge-cyan {
+    @apply badge bg-synergy-cyan/10 text-synergy-cyan border border-synergy-cyan/20;
+  }
+
+  .badge-orange {
+    @apply badge bg-synergy-orange/10 text-synergy-orange border border-synergy-orange/20;
+  }
+
+  .badge-red {
+    @apply badge bg-synergy-red/10 text-synergy-red border border-synergy-red/20;
+  }
+
+  .badge-muted {
+    @apply badge bg-white/5 text-synergy-muted border border-synergy-border;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-synergy-text;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-synergy-text;
+  }
+
+  .rank-badge-1 {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-full
+           bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 font-bold text-sm;
+  }
+  .rank-badge-2 {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-full
+           bg-slate-400/20 text-slate-300 border border-slate-400/30 font-bold text-sm;
+  }
+  .rank-badge-3 {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-full
+           bg-amber-700/20 text-amber-600 border border-amber-700/30 font-bold text-sm;
+  }
+  .rank-badge-other {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-full
+           bg-white/5 text-synergy-muted border border-synergy-border font-bold text-sm;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Smooth focus ring for accessibility */
+*:focus-visible {
+  outline: 2px solid #06b6d4;
+  outline-offset: 2px;
 }

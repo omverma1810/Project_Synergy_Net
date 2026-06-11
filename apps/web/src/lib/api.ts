@@ -1,63 +1,303 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = '/api';
 
-export async function api(endpoint: string, options: RequestInit = {}) {
-  const url = `${API_URL}/api${endpoint}`;
-
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-
-  const isFormData = options.body instanceof FormData;
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...(!isFormData && { 'Content-Type': 'application/json' }),
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || error.error || 'API request failed');
-  }
-
-  return response.json();
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth_token');
 }
 
-export const auth = {
-  login: (email: string, password: string) =>
-    api('/auth/login/', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (data: Record<string, unknown>) =>
-    api('/auth/register/', { method: 'POST', body: JSON.stringify(data) }),
-  me: () => api('/auth/me/'),
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  isFormData = false,
+): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (!isFormData) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...headers, ...(options.headers as Record<string, string> || {}) },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw Object.assign(new Error(err.detail || 'Request failed'), { status: res.status, data: err });
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export const api = {
+  auth: {
+    login: (email: string, password: string) =>
+      request<{ access: string; refresh: string }>('/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }),
+    register: (data: {
+      email: string; password: string; first_name: string; last_name: string; company_name: string;
+    }) =>
+      request<{ id: string; email: string }>('/auth/register/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    refresh: (refresh: string) =>
+      request<{ access: string }>('/auth/token/refresh/', {
+        method: 'POST',
+        body: JSON.stringify({ refresh }),
+      }),
+    me: () => request<{ id: string; email: string; first_name: string; last_name: string; company_name: string }>('/auth/me/'),
+    updateProfile: (data: Partial<{ first_name: string; last_name: string; company_name: string }>) =>
+      request<unknown>('/auth/me/', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+
+  projects: {
+    list: () => request<ProjectSummary[]>('/projects/'),
+    get: (id: number) => request<ProjectDetail>(`/projects/${id}/`),
+    create: (data: FormData) => request<ProjectDetail>('/projects/', { method: 'POST', body: data }, true),
+    createJson: (data: Record<string, unknown>) =>
+      request<ProjectDetail>('/projects/', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Record<string, unknown>) =>
+      request<ProjectDetail>(`/projects/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/projects/${id}/`, { method: 'DELETE' }),
+    uploadBudget: (projectId: number, file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('file_name', file.name);
+      fd.append('file_type', file.name.split('.').pop()?.toUpperCase() || 'CSV');
+      return request<Budget>(`/projects/${projectId}/upload-budget/`, { method: 'POST', body: fd }, true);
+    },
+    lineItems: (budgetId: number) => request<BudgetLineItem[]>(`/projects/budgets/${budgetId}/line-items/`),
+    vetting: (id: number, data: { vetting_status: string; vetting_notes?: string }) =>
+      request<ProjectDetail>(`/projects/${id}/vetting/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+
+  territories: {
+    list: (params?: Record<string, string>) => {
+      const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+      return request<Territory[]>(`/territories/${qs}`);
+    },
+    get: (id: number) => request<TerritoryDetail>(`/territories/${id}/`),
+    partners: (id: number) => request<TerritoryPartner[]>(`/territories/${id}/partners/`),
+    alerts: (params?: Record<string, string>) => {
+      const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+      return request<PolicyAlert[]>(`/territories/alerts/${qs}`);
+    },
+  },
+
+  analysis: {
+    create: (projectId: number, budgetId: number) =>
+      request<Analysis>('/analysis/', { method: 'POST', body: JSON.stringify({ project: projectId, budget: budgetId }) }),
+    get: (id: number) => request<Analysis>(`/analysis/${id}/`),
+    list: (projectId?: number) => {
+      const qs = projectId ? `?project=${projectId}` : '';
+      return request<Analysis[]>(`/analysis/${qs}`);
+    },
+  },
+
+  reports: {
+    list: () => request<Report[]>('/reports/'),
+    generate: (analysisId: number, format: 'PDF' | 'XLSX') =>
+      request<Report>('/reports/generate/', {
+        method: 'POST',
+        body: JSON.stringify({ analysis: analysisId, format }),
+      }),
+  },
 };
 
-export const projects = {
-  list: () => api('/projects/'),
-  create: (data: Record<string, unknown>) =>
-    api('/projects/', { method: 'POST', body: JSON.stringify(data) }),
-  get: (id: number) => api(`/projects/${id}/`),
-  uploadBudget: (id: number, formData: FormData) =>
-    api(`/projects/${id}/upload-budget/`, { method: 'POST', body: formData }),
-};
+// ── Type definitions ────────────────────────────────────────────────────────
 
-export const territories = {
-  list: () => api('/territories/'),
-};
+export interface ProjectSummary {
+  id: number;
+  title: string;
+  slug: string;
+  type: string;
+  genre: string;
+  total_budget: string;
+  currency: string;
+  status: string;
+  budget_count: number;
+  latest_analysis_status: string | null;
+  vetting_status?: string;
+  created_at: string;
+}
 
-export const analysis = {
-  trigger: (projectId: number) =>
-    api(`/analysis/trigger/${projectId}/`, { method: 'POST' }),
-  results: (analysisId: number) => api(`/analysis/${analysisId}/results/`),
-};
+export interface ProjectDetail extends ProjectSummary {
+  synopsis: string;
+  language: string;
+  shoot_start_date: string | null;
+  shoot_end_date: string | null;
+  shoot_duration_days: number | null;
+  script_file: string | null;
+  shooting_plan_file: string | null;
+  cast_crew_info: Record<string, unknown>;
+  spend_estimates: Record<string, number>;
+  production_timeline: Record<string, string>;
+  vetting_notes: string;
+  vetting_reviewed_at: string | null;
+  budgets: Budget[];
+}
 
-export const reports = {
-  list: () => api('/reports/'),
-  generate: (analysisId: number, format: 'PDF' | 'EXCEL') =>
-    api(`/reports/generate/${analysisId}/`, {
-      method: 'POST',
-      body: JSON.stringify({ format }),
-    }),
-  download: (reportId: number) => api(`/reports/download/${reportId}/`),
-};
+export interface Budget {
+  id: number;
+  project: number;
+  file_name: string;
+  file_type: string;
+  extraction_status: string;
+  confidence_score: string | null;
+  extracted_at: string | null;
+  line_items: BudgetLineItem[];
+  line_item_count: number;
+  created_at: string;
+}
+
+export interface BudgetLineItem {
+  id: number;
+  description: string;
+  category: string;
+  amount: string;
+  currency: string;
+  is_above_the_line: boolean;
+  is_local_eligible: boolean;
+}
+
+export interface Territory {
+  id: number;
+  name: string;
+  country_code: string;
+  region: string;
+  incentive_type: string;
+  base_percentage: string;
+  provincial_percentage: string;
+  is_stackable: boolean;
+  min_spend: string | null;
+  max_rebate_cap: string | null;
+  is_capped: boolean;
+  currency: string;
+  status: string;
+  rebate_timing_months_min: number;
+  rebate_timing_months_max: number;
+  loan_against_rebate_available: boolean;
+  documentary_eligible: boolean;
+  animation_eligible: boolean;
+  streaming_eligible: boolean;
+  sci_fi_eligible: boolean;
+  official_url: string;
+  last_verified_at: string | null;
+}
+
+export interface TerritoryDetail extends Territory {
+  rules: TerritoryRule[];
+  compliance_items: ComplianceItem[];
+  genre_profiles: GenreProfile[];
+  partners: TerritoryPartner[];
+  description: string;
+}
+
+export interface TerritoryRule {
+  id: number;
+  rule_type: string;
+  configuration: Record<string, unknown>;
+  priority: number;
+}
+
+export interface ComplianceItem {
+  id: number;
+  item_type: string;
+  description: string;
+  deadline_type: string;
+  is_mandatory: boolean;
+  notes: string;
+}
+
+export interface GenreProfile {
+  id: number;
+  genre: string;
+  bonus_percentage: string;
+  eligibility_notes: string;
+}
+
+export interface TerritoryPartner {
+  id: number;
+  name: string;
+  partner_type: string;
+  email: string;
+  phone: string;
+  website: string;
+  bio: string;
+  is_vetted: boolean;
+}
+
+export interface PolicyAlert {
+  id: number;
+  territory: number | null;
+  territory_name: string | null;
+  title: string;
+  description: string;
+  change_type: string;
+  previous_value: string;
+  new_value: string;
+  effective_date: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Analysis {
+  id: number;
+  project: number;
+  project_title: string;
+  budget: number;
+  status: string;
+  triggered_by: string;
+  started_at: string | null;
+  completed_at: string | null;
+  results: AnalysisResult[];
+  created_at: string;
+}
+
+export interface AnalysisResult {
+  id: number;
+  territory: number;
+  territory_name: string;
+  territory_country: string;
+  territory_percentage: string;
+  territory_region: string;
+  territory_incentive_type: string;
+  rank: number;
+  qualified_spend_total: string;
+  estimated_rebate: string;
+  estimated_rebate_pct: string;
+  logistics_premium: string;
+  net_benefit: string;
+  payback_timeline_months: number;
+  confidence_score: string;
+  currency: string;
+  rebate_timing_months: number;
+  loan_against_rebate_available: boolean;
+  financing_benefit_estimate: string;
+  recoupment_priority: string;
+  details: {
+    category_breakdown: Record<string, { qualified: number; total: number }>;
+    checklist_items: ComplianceItem[];
+    effective_percentage: number;
+    base_percentage: number;
+    provincial_percentage: number;
+    genre_bonus: number;
+    treaty_bonus: number;
+    total_budget: number;
+  };
+}
+
+export interface Report {
+  id: number;
+  analysis: number;
+  project_title: string;
+  format: string;
+  file_url: string | null;
+  file_size: number | null;
+  generated_at: string;
+  download_count: number;
+  expiry_date: string | null;
+}

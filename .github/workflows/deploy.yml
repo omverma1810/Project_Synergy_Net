@@ -1,0 +1,131 @@
+name: Build & Deploy to Cloud Run
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  REGION: us-central1
+  SERVICE_NAME: synergy-api
+  REGISTRY: us-central1-docker.pkg.dev
+  REPO: synergy-net
+
+jobs:
+  build-and-deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Set image variables
+        id: vars
+        run: |
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          IMAGE_BASE="${{ env.REGISTRY }}/${PROJECT_ID}/${{ env.REPO }}/api"
+          echo "image_base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_BASE}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "${{ steps.vars.outputs.image_tag }}" \
+            -t "${{ steps.vars.outputs.image_base }}:latest" \
+            -f apps/api/Dockerfile \
+            apps/api/
+
+      - name: Push Docker image
+        run: |
+          docker push "${{ steps.vars.outputs.image_tag }}"
+          docker push "${{ steps.vars.outputs.image_base }}:latest"
+
+      - name: Delete old images (keep latest 5)
+        run: |
+          IMAGE_BASE="${{ steps.vars.outputs.image_base }}"
+          # List all digests sorted by update time, skip first 5, delete the rest
+          OLD_DIGESTS=$(gcloud artifacts docker images list "${IMAGE_BASE}" \
+            --include-tags \
+            --sort-by="~UPDATE_TIME" \
+            --format="get(version)" \
+            2>/dev/null | tail -n +6)
+
+          if [ -n "${OLD_DIGESTS}" ]; then
+            while IFS= read -r digest; do
+              echo "Deleting old image: ${digest}"
+              gcloud artifacts docker images delete "${IMAGE_BASE}@${digest}" \
+                --quiet --delete-tags 2>/dev/null || echo "  (skipped — already deleted)"
+            done <<< "${OLD_DIGESTS}"
+          else
+            echo "No old images to delete (≤5 images present)"
+          fi
+
+      - name: Run database migrations via Cloud Run Job
+        run: |
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          IMAGE_TAG="${{ steps.vars.outputs.image_tag }}"
+
+          # Create or update the migration job
+          gcloud run jobs create migrate-job \
+            --image="${IMAGE_TAG}" \
+            --region="${{ env.REGION }}" \
+            --project="${PROJECT_ID}" \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production" \
+            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_NAME=db-name:latest,DB_USER=db-user:latest" \
+            --command="python,manage.py,migrate,--noinput" \
+            --max-retries=1 \
+            2>/dev/null || \
+          gcloud run jobs update migrate-job \
+            --image="${IMAGE_TAG}" \
+            --region="${{ env.REGION }}" \
+            --project="${PROJECT_ID}" \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production" \
+            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_NAME=db-name:latest,DB_USER=db-user:latest"
+
+          # Execute and wait
+          gcloud run jobs execute migrate-job \
+            --region="${{ env.REGION }}" \
+            --project="${PROJECT_ID}" \
+            --wait
+
+      - name: Deploy to Cloud Run
+        run: |
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          IMAGE_TAG="${{ steps.vars.outputs.image_tag }}"
+
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image="${IMAGE_TAG}" \
+            --region="${{ env.REGION }}" \
+            --project="${PROJECT_ID}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production,CELERY_TASK_ALWAYS_EAGER=True" \
+            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_NAME=db-name:latest,DB_USER=db-user:latest" \
+            --min-instances=1 \
+            --max-instances=10 \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --port=8080
+
+      - name: Print service URL
+        run: |
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format="value(status.url)"
