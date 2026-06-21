@@ -157,7 +157,7 @@ export default function DashboardPage() {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: '#f8fafc' }}
-                  formatter={(v: number) => [fmt(v), 'Avg Net Benefit']}
+                  formatter={(v) => [fmt(Number(v)), 'Avg Net Benefit']}
                 />
                 <Bar dataKey="avg" radius={[4, 4, 0, 0]}>
                   {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}

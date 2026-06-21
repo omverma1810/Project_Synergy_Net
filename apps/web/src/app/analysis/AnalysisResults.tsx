@@ -159,7 +159,7 @@ export default function AnalysisResults() {
                   tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v: number) => [fmt(v), '']}
+                  formatter={(v) => [fmt(Number(v)), '']}
                 />
                 <Bar dataKey="net" name="Net Benefit" radius={[4, 4, 0, 0]}>
                   {barData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}

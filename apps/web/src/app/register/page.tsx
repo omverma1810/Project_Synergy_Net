@@ -44,9 +44,12 @@ export default function RegisterPage() {
           password: data.password,
         }),
       });
-      const json = await res.json();
+      const json: Record<string, unknown> = await res.json();
       if (!res.ok) {
-        const msg = json.email?.[0] || json.detail || Object.values(json)[0]?.[0] || 'Registration failed';
+        const firstVal = Object.values(json)[0];
+        const fromArray = Array.isArray(firstVal) ? firstVal[0] : undefined;
+        const emailErr = Array.isArray(json.email) ? json.email[0] : undefined;
+        const msg = String(emailErr || json.detail || fromArray || 'Registration failed');
         setError(msg);
         return;
       }
