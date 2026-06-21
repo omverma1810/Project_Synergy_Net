@@ -57,13 +57,13 @@ export default function RegisterPage() {
 
   return (
     <AuthShell>
-      <div className="glass-card grain p-8">
+      <div className="glass-card grain p-5 sm:p-8">
           <p className="eyebrow mb-2">Get started free</p>
           <h1 className="text-2xl font-bold text-synergy-text mb-1">Create your account</h1>
           <p className="text-sm text-synergy-muted mb-6">Join producers optimising shoots across 16+ territories.</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="form-label">First name</label>
                 <input {...register('first_name')} type="text" placeholder="Alex" className="form-input" />

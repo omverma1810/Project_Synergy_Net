@@ -192,29 +192,29 @@ export default function AnalysisResults() {
           className="relative overflow-hidden rounded-2xl border border-synergy-gold/30 bg-synergy-card/70 backdrop-blur-xl p-6 grain"
         >
           <div className="absolute -top-16 -right-10 h-48 w-48 rounded-full bg-synergy-gold/15 blur-3xl pointer-events-none" />
-          <div className="relative flex flex-wrap items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-gold shadow-glow-gold">
-                <TrophyIcon className="h-6 w-6 text-synergy-darker" />
+          <div className="relative flex flex-wrap items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-gold shadow-glow-gold">
+                <TrophyIcon className="h-5 w-5 sm:h-6 sm:w-6 text-synergy-darker" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-wider text-synergy-gold/80 font-semibold">Recommended Territory</p>
-                <p className="text-xl font-bold text-synergy-text">{winner.territory_name}</p>
+                <p className="text-lg sm:text-xl font-bold text-synergy-text truncate">{winner.territory_name}</p>
                 <p className="text-xs text-synergy-muted">{winner.territory_region} · {winner.territory_incentive_type.replace('_', ' ').toLowerCase()}</p>
               </div>
             </div>
-            <div className="flex-1" />
-            <div className="grid grid-cols-3 gap-6">
+            <div className="flex-1 hidden sm:block" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6 w-full sm:w-auto">
               <div>
-                <p className="text-2xl font-bold gradient-text-gold">{fmtPct(winner.estimated_rebate_pct)}</p>
+                <p className="text-xl sm:text-2xl font-bold gradient-text-gold">{fmtPct(winner.estimated_rebate_pct)}</p>
                 <p className="text-xs text-synergy-muted">effective rate</p>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-synergy-text">{fmt(winner.estimated_rebate, winner.currency)}</p>
+              <div className="hidden sm:block">
+                <p className="text-xl sm:text-2xl font-bold text-synergy-text">{fmt(winner.estimated_rebate, winner.currency)}</p>
                 <p className="text-xs text-synergy-muted">gross rebate</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-synergy-green">{fmt(winner.net_benefit, winner.currency)}</p>
+                <p className="text-xl sm:text-2xl font-bold text-synergy-green">{fmt(winner.net_benefit, winner.currency)}</p>
                 <p className="text-xs text-synergy-muted">net benefit</p>
               </div>
             </div>
@@ -286,7 +286,7 @@ export default function AnalysisResults() {
                 : 'hover:border-synergy-cyan/30 hover:shadow-glow-cyan'
             }`}
           >
-            <div className="p-5 flex items-center gap-4 cursor-pointer" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+            <div className="p-4 sm:p-5 flex items-center gap-3 sm:gap-4 cursor-pointer" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
               <RankBadge rank={r.rank} />
 
               <div className="flex-1 min-w-0">
@@ -294,6 +294,13 @@ export default function AnalysisResults() {
                 <p className="text-xs text-synergy-muted">{r.territory_region} · {r.territory_incentive_type.replace('_', ' ')}</p>
               </div>
 
+              {/* Mobile: compact rate + net */}
+              <div className="sm:hidden flex flex-col items-end shrink-0 gap-0.5">
+                <p className="text-sm font-semibold text-synergy-cyan">{parseFloat(r.estimated_rebate_pct).toFixed(1)}%</p>
+                <p className="text-xs font-semibold text-synergy-green">{fmt(r.net_benefit, r.currency)}</p>
+              </div>
+
+              {/* Desktop: full 3-col */}
               <div className="hidden sm:grid grid-cols-3 gap-6 text-right">
                 <div>
                   <p className="font-semibold text-synergy-cyan">{parseFloat(r.estimated_rebate_pct).toFixed(1)}%</p>
@@ -309,8 +316,8 @@ export default function AnalysisResults() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-synergy-muted">{Math.round(parseFloat(r.confidence_score) * 100)}%</span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-xs text-synergy-muted hidden sm:inline">{Math.round(parseFloat(r.confidence_score) * 100)}%</span>
                 <motion.div animate={{ rotate: expanded === r.id ? 180 : 0 }} transition={{ duration: 0.2 }}>
                   <ChevronDownIcon className="h-4 w-4 text-synergy-muted" />
                 </motion.div>

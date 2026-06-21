@@ -108,18 +108,20 @@ export default function TerritoriesPage() {
       )}
 
       <div className="flex flex-wrap gap-3 mb-6">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative w-full sm:flex-1 sm:min-w-48">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-synergy-muted" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search territories…" className="form-input pl-10" />
         </div>
-        <select value={region} onChange={e => setRegion(e.target.value)} className="form-select w-auto">
-          {REGIONS.map(r => <option key={r}>{r}</option>)}
-        </select>
-        <select value={genre} onChange={e => setGenre(e.target.value)} className="form-select w-auto">
-          {[['All', 'All Genres'], ['animation', 'Animation'], ['documentary', 'Documentary'], ['streaming', 'Streaming'], ['sci_fi', 'Sci-Fi']].map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
+        <div className="flex gap-3 w-full sm:w-auto">
+          <select value={region} onChange={e => setRegion(e.target.value)} className="form-select flex-1 sm:flex-none sm:w-auto">
+            {REGIONS.map(r => <option key={r}>{r}</option>)}
+          </select>
+          <select value={genre} onChange={e => setGenre(e.target.value)} className="form-select flex-1 sm:flex-none sm:w-auto">
+            {[['All', 'All Genres'], ['animation', 'Animation'], ['documentary', 'Documentary'], ['streaming', 'Streaming'], ['sci_fi', 'Sci-Fi']].map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -113,8 +113,11 @@ body {
   }
 
   .stat-card {
-    @apply glass-card p-6 overflow-hidden transition-all duration-300
+    @apply glass-card p-4 overflow-hidden transition-all duration-300
            hover:border-synergy-cyan/30 hover:shadow-glow-cyan hover:-translate-y-0.5;
+  }
+  @screen sm {
+    .stat-card { @apply p-6; }
   }
 
   /* ─── Buttons ──────────────────────────────────────────────────── */

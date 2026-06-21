@@ -131,16 +131,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             ? <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
             : <ChartBarIcon className="h-4 w-4" />
           }
-          Run Analysis
+          <span className="hidden sm:inline">Run Analysis</span>
         </motion.button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-synergy-card/40 border border-synergy-border/40 rounded-xl p-1 w-fit">
+      <div className="flex gap-1 mb-6 bg-synergy-card/40 border border-synergy-border/40 rounded-xl p-1 w-full sm:w-fit overflow-x-auto">
         {TABS.map((tab, i) => (
           <button key={tab} onClick={() => setActiveTab(i)}
             className={[
-              'relative px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200',
+              'relative px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-1 sm:flex-none',
               activeTab === i ? 'text-synergy-darker' : 'text-synergy-muted hover:text-synergy-text',
             ].join(' ')}
           >

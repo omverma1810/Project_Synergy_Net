@@ -86,7 +86,7 @@ export default function SettingsPage() {
           <div className="glass-card p-6">
             <h2 className="section-title mb-4">Profile</h2>
             <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">First name</label>
                   <input {...profileForm.register('first_name')} className="form-input" />

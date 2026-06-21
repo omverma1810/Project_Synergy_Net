@@ -46,7 +46,7 @@ export default function LoginPage() {
 
   return (
     <AuthShell>
-      <div className="glass-card grain p-8">
+      <div className="glass-card grain p-5 sm:p-8">
         <p className="eyebrow mb-2">Welcome back</p>
         <h1 className="text-2xl font-bold text-synergy-text mb-1">Sign in to Synergy Net</h1>
         <p className="text-sm text-synergy-muted mb-6">Continue optimising your global production finance.</p>

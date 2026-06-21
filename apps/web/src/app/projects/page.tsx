@@ -135,61 +135,61 @@ export default function ProjectsPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-              className="group glass-card p-5 flex items-center gap-4 transition-all duration-300 hover:border-synergy-cyan/30 hover:shadow-glow-cyan hover:-translate-y-0.5"
+              className="group glass-card p-4 sm:p-5 transition-all duration-300 hover:border-synergy-cyan/30 hover:shadow-glow-cyan hover:-translate-y-0.5"
             >
-              <div className="h-11 w-11 rounded-xl bg-synergy-cyan/10 border border-synergy-cyan/20 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
-                <FolderIcon className="h-5 w-5 text-synergy-cyan" />
-              </div>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-synergy-cyan/10 border border-synergy-cyan/20 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
+                  <FolderIcon className="h-4 w-4 sm:h-5 sm:w-5 text-synergy-cyan" />
+                </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Link href={`/projects/${project.id}`}
-                    className="font-semibold text-synergy-text hover:text-synergy-cyan transition-colors truncate"
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link href={`/projects/${project.id}`}
+                      className="font-semibold text-synergy-text hover:text-synergy-cyan transition-colors truncate"
+                    >
+                      {project.title}
+                    </Link>
+                    <span className={STATUS_BADGES[project.status] || 'badge-muted'}>{project.status?.toLowerCase()}</span>
+                    {project.vetting_status === 'APPROVED' && <span className="badge-green">vetted</span>}
+                    {project.vetting_status === 'FLAGGED' && <span className="badge-red">flagged</span>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-synergy-muted flex-wrap">
+                    <span>{project.type}</span>
+                    {project.genre && <><span>·</span><span>{project.genre}</span></>}
+                    {project.total_budget && (
+                      <><span className="hidden sm:inline">·</span>
+                      <span className="hidden sm:inline">{parseFloat(project.total_budget).toLocaleString('en-US', {
+                        style: 'currency', currency: project.currency, maximumFractionDigits: 0
+                      })}</span></>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={() => handleAnalyze(project)}
+                    className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 sm:px-4"
                   >
-                    {project.title}
+                    <ChartBarIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">Analyze</span>
+                  </motion.button>
+                  <Link href={`/projects/${project.id}`} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 sm:px-4">
+                    <EyeIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">View</span>
                   </Link>
-                  <span className={STATUS_BADGES[project.status] || 'badge-muted'}>{project.status?.toLowerCase()}</span>
-                  {project.vetting_status === 'APPROVED' && <span className="badge-green">vetted</span>}
-                  {project.vetting_status === 'FLAGGED' && <span className="badge-red">flagged</span>}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    onClick={() => handleDelete(project.id)}
+                    disabled={deleting === project.id}
+                    className="btn-danger flex items-center gap-1.5 text-xs px-2.5 sm:px-4"
+                  >
+                    {deleting === project.id
+                      ? <span className="h-4 w-4 border-2 border-synergy-red/30 border-t-synergy-red rounded-full animate-spin" />
+                      : <TrashIcon className="h-4 w-4" />
+                    }
+                  </motion.button>
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-synergy-muted flex-wrap">
-                  <span>{project.type}</span>
-                  {project.genre && <><span>·</span><span>{project.genre}</span></>}
-                  {project.total_budget && (
-                    <><span>·</span>
-                    <span>{parseFloat(project.total_budget).toLocaleString('en-US', {
-                      style: 'currency', currency: project.currency, maximumFractionDigits: 0
-                    })}</span></>
-                  )}
-                  <span>·</span>
-                  <span>{project.budget_count} budget{project.budget_count !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <motion.button
-                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => handleAnalyze(project)}
-                  className="btn-secondary flex items-center gap-1.5 text-xs"
-                >
-                  <ChartBarIcon className="h-4 w-4" />
-                  <span className="hidden sm:inline">Analyze</span>
-                </motion.button>
-                <Link href={`/projects/${project.id}`} className="btn-secondary flex items-center gap-1.5 text-xs">
-                  <EyeIcon className="h-4 w-4" />
-                  <span className="hidden sm:inline">View</span>
-                </Link>
-                <motion.button
-                  whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => handleDelete(project.id)}
-                  disabled={deleting === project.id}
-                  className="btn-danger flex items-center gap-1.5 text-xs"
-                >
-                  {deleting === project.id
-                    ? <span className="h-4 w-4 border-2 border-synergy-red/30 border-t-synergy-red rounded-full animate-spin" />
-                    : <TrashIcon className="h-4 w-4" />
-                  }
-                </motion.button>
               </div>
             </motion.div>
           ))}

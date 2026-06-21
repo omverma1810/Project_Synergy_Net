@@ -128,7 +128,7 @@ export default function NewProjectPage() {
                 >
                   {i < step ? <CheckIcon className="h-4 w-4" /> : i + 1}
                 </motion.div>
-                <span className={`text-xs mt-1.5 whitespace-nowrap font-medium ${i === step ? 'text-synergy-cyan' : i < step ? 'text-synergy-green' : 'text-synergy-muted'}`}>{label}</span>
+                <span className={`text-[10px] sm:text-xs mt-1.5 text-center leading-tight font-medium ${i === step ? 'text-synergy-cyan' : i < step ? 'text-synergy-green' : 'text-synergy-muted'}`}>{label}</span>
               </div>
               {i < STEPS.length - 1 && (
                 <div className="h-0.5 flex-1 mx-3 mb-5 rounded-full bg-synergy-border overflow-hidden">
@@ -163,7 +163,7 @@ export default function NewProjectPage() {
                   <input {...register('title')} placeholder="Desert Wind" className="form-input" />
                   {errors.title && <p className="mt-1 text-xs text-synergy-red">{errors.title.message}</p>}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="form-label">Type *</label>
                     <select {...register('type')} className="form-select">
@@ -182,7 +182,7 @@ export default function NewProjectPage() {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="form-label">Language</label>
                     <input {...register('language')} placeholder="English" className="form-input" />
@@ -203,7 +203,7 @@ export default function NewProjectPage() {
                   <label className="form-label">Synopsis</label>
                   <textarea {...register('synopsis')} rows={3} placeholder="Brief description…" className="form-input resize-none" />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="form-label">Shoot Start</label>
                     <input {...register('shoot_start_date')} type="date" className="form-input" />

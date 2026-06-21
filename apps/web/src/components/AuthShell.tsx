@@ -111,7 +111,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       </div>
 
       {/* ── Form panel ── */}
-      <div className="relative flex items-center justify-center px-6 py-12">
+      <div className="relative flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
         <div className="pointer-events-none absolute inset-0 lg:hidden overflow-hidden">
           <div className="absolute -top-40 -left-20 w-80 h-80 bg-synergy-cyan/10 rounded-full blur-3xl" />
         </div>

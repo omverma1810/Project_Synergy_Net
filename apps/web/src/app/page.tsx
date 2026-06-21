@@ -101,7 +101,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
           <p className="eyebrow mb-1.5">Production Finance Intelligence</p>
-          <h1 className="text-3xl font-bold tracking-tight text-synergy-text">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-synergy-text">
             {greeting}{firstName ? <>, <span className="gradient-text">{firstName}</span></> : ''}
           </h1>
           <p className="text-synergy-muted text-sm mt-1.5">Here&apos;s your global incentive overview.</p>
@@ -138,13 +138,13 @@ export default function DashboardPage() {
         {stats.map((stat) => (
           <motion.div key={stat.label} variants={stagger.item}>
             <SpotlightCard className="stat-card h-full">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.bg}`}>
-                  <stat.icon className={`h-5 w-5 ${stat.tone}`} />
+              <div className="flex items-start justify-between mb-3">
+                <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl ${stat.bg}`}>
+                  <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.tone}`} />
                 </div>
-                <span className="text-[11px] text-synergy-muted text-right max-w-[60%]">{stat.sub}</span>
+                <span className="text-[10px] sm:text-[11px] text-synergy-muted text-right max-w-[55%] sm:max-w-[60%] leading-tight">{stat.sub}</span>
               </div>
-              <div className="text-2xl font-bold text-synergy-text truncate">{stat.display}</div>
+              <div className="text-xl sm:text-2xl font-bold text-synergy-text truncate">{stat.display}</div>
               <div className="text-xs text-synergy-muted mt-1">{stat.label}</div>
             </SpotlightCard>
           </motion.div>
