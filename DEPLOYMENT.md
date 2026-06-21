@@ -221,3 +221,15 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 # Stream logs
 gcloud run services logs tail synergy-api --region=us-central1
 ```
+
+## Live URLs
+
+| Service | URL |
+|---|---|
+| Frontend | https://project-synergy-net.vercel.app |
+| Backend API | https://synergy-api-7bchlbqc2q-an.a.run.app |
+| Database | Supabase — aws-1-ap-northeast-1 (Tokyo) |
+
+## Demo credentials
+- Email: `demo@synergy.net`
+- Password: `demo123`
