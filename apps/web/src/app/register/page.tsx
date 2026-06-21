@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { AuthShell } from '@/components/AuthShell';
 
 const schema = z.object({
   first_name: z.string().min(1, 'First name is required'),
@@ -76,32 +77,11 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-synergy-dark flex items-center justify-center px-4 py-12">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 right-20 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 -left-20 w-80 h-80 bg-synergy-cyan/10 rounded-full blur-3xl" />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-md"
-      >
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <div className="h-9 w-9 rounded-xl bg-synergy-cyan/20 border border-synergy-cyan/40 flex items-center justify-center">
-              <div className="h-4 w-4 rounded-sm bg-synergy-cyan" />
-            </div>
-            <span className="text-xl font-bold text-synergy-text tracking-wide">
-              SYNERGY <span className="text-synergy-cyan">NET</span>
-            </span>
-          </div>
-          <p className="text-synergy-muted text-sm">Production Finance Intelligence Platform</p>
-        </div>
-
-        <div className="glass-card p-8">
-          <h1 className="text-xl font-semibold text-synergy-text mb-6">Create your account</h1>
+    <AuthShell>
+      <div className="glass-card grain p-8">
+          <p className="eyebrow mb-2">Get started free</p>
+          <h1 className="text-2xl font-bold text-synergy-text mb-1">Create your account</h1>
+          <p className="text-sm text-synergy-muted mb-6">Join producers optimising shoots across 16+ territories.</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -155,11 +135,11 @@ export default function RegisterPage() {
               whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={loading}
-              className="btn-primary w-full justify-center flex items-center gap-2 py-2.5 mt-2"
+              className="btn-primary w-full py-2.5 mt-2"
             >
               {loading ? (
                 <>
-                  <span className="h-4 w-4 border-2 border-synergy-dark/30 border-t-synergy-dark rounded-full animate-spin" />
+                  <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
                   Creating account…
                 </>
               ) : (
@@ -174,8 +154,7 @@ export default function RegisterPage() {
               Sign in
             </Link>
           </p>
-        </div>
-      </motion.div>
-    </div>
+      </div>
+    </AuthShell>
   );
 }
