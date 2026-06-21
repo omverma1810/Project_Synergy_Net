@@ -126,16 +126,47 @@ Or trigger manually in GitHub → Actions → "Build & Deploy to Cloud Run" → 
 
 ---
 
-## Step 6 — Frontend Deployment (Next.js)
+## Step 6 — Frontend Deployment (Next.js on Vercel)
 
-### Option A: Vercel (recommended)
+The frontend lives in `apps/web` (a monorepo subdirectory) and is configured
+via `apps/web/vercel.json`. The app talks to the Django backend through Next.js
+rewrites: every `/api/*` request is proxied to the `API_URL` server env var, so
+the browser only ever calls same-origin `/api/...` — no CORS headaches.
+
+### A. Import the repo (one-time)
+
+1. Go to https://vercel.com/new and import `omverma1810/Project_Synergy_Net`.
+2. **Set the Root Directory to `apps/web`** — this is the critical monorepo step.
+   Vercel auto-detects Next.js, pnpm, and reads `apps/web/vercel.json`.
+3. Add Environment Variables (Project → Settings → Environment Variables):
+
+   | Name | Value | Notes |
+   |------|-------|-------|
+   | `API_URL` | `https://synergy-api-XXXX.run.app` | Cloud Run backend URL (server-side; powers the `/api` rewrite) |
+   | `NEXT_PUBLIC_API_URL` | `https://synergy-api-XXXX.run.app` | Same value; available to the browser |
+
+4. Click **Deploy**. Subsequent pushes to `master` auto-deploy; PRs get preview URLs.
+
+### B. CLI deploy (optional)
 ```bash
 cd apps/web
+npx vercel link          # link to the project (root dir = current dir)
+npx vercel env add API_URL production
 npx vercel --prod
-# Set NEXT_PUBLIC_API_URL to your Cloud Run URL
 ```
 
-### Option B: Cloud Run
+### C. Point the backend's CORS/CSRF at the Vercel domain
+
+In Cloud Run, set on the `synergy-api` service:
+```bash
+gcloud run services update synergy-api --region=us-central1 \
+  --set-env-vars="CORS_ALLOWED_ORIGINS=https://your-app.vercel.app,ALLOWED_HOSTS=*.run.app,your-app.vercel.app"
+```
+
+> Because the frontend proxies through `/api`, CORS is only needed if you ever
+> call the backend cross-origin directly. The rewrite keeps requests same-origin.
+
+### Alternative: Cloud Run (containerised frontend)
 ```bash
 docker build -t gcr.io/PROJECT_ID/synergy-web apps/web/
 docker push gcr.io/PROJECT_ID/synergy-web

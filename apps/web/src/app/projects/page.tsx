@@ -11,8 +11,10 @@ import {
   FolderIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 import { api, ProjectSummary } from '@/lib/api';
 import Layout from '@/components/Layout';
+import { RowSkeleton } from '@/components/ui/Skeleton';
 
 const STATUS_BADGES: Record<string, string> = {
   DRAFT: 'badge-muted',
@@ -48,33 +50,38 @@ export default function ProjectsPage() {
     try {
       await api.projects.delete(id);
       setProjects(prev => prev.filter(p => p.id !== id));
+      toast.success('Project deleted');
     } catch {
+      toast.error('Could not delete project');
     } finally {
       setDeleting(null);
     }
   };
 
   const handleAnalyze = async (project: ProjectSummary) => {
+    const t = toast.loading(`Starting analysis for ${project.title}…`);
     try {
       const detail = await api.projects.get(project.id);
       if (!detail.budgets?.length) {
-        alert('Upload a budget first before running analysis.');
+        toast.error('Upload a budget or add spend estimates first.', { id: t });
         return;
       }
       const budget = detail.budgets[detail.budgets.length - 1];
       const analysis = await api.analysis.create(project.id, budget.id);
+      toast.success('Analysis started', { id: t });
       router.push(`/analysis?id=${analysis.id}`);
     } catch (e: unknown) {
-      alert((e as Error).message || 'Failed to start analysis');
+      toast.error((e as Error).message || 'Failed to start analysis', { id: t });
     }
   };
 
   if (loading) {
     return (
       <Layout>
-        <div className="space-y-4 animate-pulse">
-          <div className="h-8 w-40 bg-synergy-card rounded-lg" />
-          {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-synergy-card rounded-2xl" />)}
+        <div className="h-8 w-40 skeleton mb-2" />
+        <div className="h-4 w-32 skeleton mb-8" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => <RowSkeleton key={i} />)}
         </div>
       </Layout>
     );
@@ -82,12 +89,13 @@ export default function ProjectsPage() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
+          <p className="eyebrow mb-1.5">Your Slate</p>
           <h1 className="page-title">Projects</h1>
-          <p className="text-synergy-muted text-sm mt-1">{projects.length} total projects</p>
+          <p className="text-synergy-muted text-sm mt-1.5">{projects.length} total {projects.length === 1 ? 'project' : 'projects'}</p>
         </div>
-        <Link href="/projects/new" className="btn-primary flex items-center gap-2">
+        <Link href="/projects/new" className="btn-primary">
           <PlusIcon className="h-4 w-4" />
           New Project
         </Link>
@@ -127,9 +135,9 @@ export default function ProjectsPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-              className="glass-card p-5 flex items-center gap-4 hover:border-synergy-cyan/20 transition-all"
+              className="group glass-card p-5 flex items-center gap-4 transition-all duration-300 hover:border-synergy-cyan/30 hover:shadow-glow-cyan hover:-translate-y-0.5"
             >
-              <div className="h-10 w-10 rounded-xl bg-synergy-cyan/10 border border-synergy-cyan/20 flex items-center justify-center shrink-0">
+              <div className="h-11 w-11 rounded-xl bg-synergy-cyan/10 border border-synergy-cyan/20 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
                 <FolderIcon className="h-5 w-5 text-synergy-cyan" />
               </div>
 
@@ -140,7 +148,9 @@ export default function ProjectsPage() {
                   >
                     {project.title}
                   </Link>
-                  <span className={STATUS_BADGES[project.status] || 'badge-muted'}>{project.status}</span>
+                  <span className={STATUS_BADGES[project.status] || 'badge-muted'}>{project.status?.toLowerCase()}</span>
+                  {project.vetting_status === 'APPROVED' && <span className="badge-green">vetted</span>}
+                  {project.vetting_status === 'FLAGGED' && <span className="badge-red">flagged</span>}
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-synergy-muted flex-wrap">
                   <span>{project.type}</span>

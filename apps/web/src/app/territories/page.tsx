@@ -65,19 +65,27 @@ export default function TerritoriesPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8 animate-pulse">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-48 bg-synergy-card rounded-2xl" />)}
+        <div className="h-8 w-48 skeleton mb-2" />
+        <div className="h-4 w-64 skeleton mb-8" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <div key={i} className="h-52 skeleton rounded-2xl" />)}
         </div>
       </Layout>
     );
   }
 
+  const topRate = territories.reduce((max, t) => Math.max(max, parseFloat(t.base_percentage)), 0);
+
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
+          <p className="eyebrow mb-1.5">Global Incentive Atlas</p>
           <h1 className="page-title">Territories</h1>
-          <p className="text-synergy-muted text-sm mt-1">{territories.length} active incentive programs</p>
+          <p className="text-synergy-muted text-sm mt-1.5">
+            {territories.length} active programs · top rate{' '}
+            <span className="gradient-text-gold font-semibold">{topRate.toFixed(0)}%</span>
+          </p>
         </div>
       </div>
 
@@ -122,12 +130,16 @@ export default function TerritoriesPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ duration: 0.2 }}
-              className="glass-card overflow-hidden hover:border-synergy-cyan/20 transition-all"
+              className={`glass-card overflow-hidden transition-all duration-300 ${
+                expanded === t.id
+                  ? 'border-synergy-cyan/40 shadow-glow-cyan'
+                  : 'hover:border-synergy-cyan/30 hover:shadow-glow-cyan hover:-translate-y-0.5'
+              }`}
             >
               <div className="p-5 cursor-pointer" onClick={() => toggleExpand(t)}>
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{FLAGS[t.country_code] || '🌍'}</span>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl drop-shadow-lg">{FLAGS[t.country_code] || '🌍'}</span>
                     <div>
                       <p className="font-semibold text-synergy-text text-sm leading-tight">{t.name}</p>
                       <p className="text-xs text-synergy-muted">{t.region}</p>
@@ -138,9 +150,9 @@ export default function TerritoriesPage() {
                   </motion.div>
                 </div>
 
-                <div className="mb-3">
-                  <span className="text-3xl font-bold text-synergy-cyan">{parseFloat(t.base_percentage).toFixed(1)}%</span>
-                  <span className="text-synergy-muted text-sm ml-1">rebate</span>
+                <div className="mb-3 flex items-baseline gap-1">
+                  <span className="text-4xl font-bold gradient-text tracking-tight">{parseFloat(t.base_percentage).toFixed(1)}%</span>
+                  <span className="text-synergy-muted text-sm">rebate</span>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap mb-3">

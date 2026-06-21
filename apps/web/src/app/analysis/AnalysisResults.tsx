@@ -2,14 +2,20 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDownIcon, DocumentArrowDownIcon, ClockIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
+import { ChevronDownIcon, DocumentArrowDownIcon, ClockIcon, BanknotesIcon, TrophyIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
 } from 'recharts';
 import { api, Analysis, AnalysisResult } from '@/lib/api';
+import { SynergyMark } from '@/components/Brand';
 
-const COLORS = ['#06b6d4', '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+const COLORS = ['#22d3ee', '#3b82f6', '#a78bfa', '#34d399', '#fbbf24', '#f87171'];
+
+function fmtPct(n: string | number) {
+  return `${parseFloat(String(n)).toFixed(1)}%`;
+}
 
 function fmt(n: string | number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(n));
@@ -55,9 +61,14 @@ export default function AnalysisResults() {
     setGeneratingReport(format);
     try {
       const report = await api.reports.generate(analysis.id, format);
-      if (report.file_url) window.open(report.file_url, '_blank');
+      if (report.file_url) {
+        window.open(report.file_url, '_blank');
+        toast.success(`${format} report ready`);
+      } else {
+        toast.success(`${format} report queued`);
+      }
     } catch (e: unknown) {
-      alert((e as Error).message || 'Report generation failed');
+      toast.error((e as Error).message || 'Report generation failed');
     } finally {
       setGeneratingReport(null);
     }
@@ -65,9 +76,13 @@ export default function AnalysisResults() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-8 w-64 bg-synergy-card rounded-lg" />
-        {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-synergy-card rounded-2xl" />)}
+      <div className="space-y-4">
+        <div className="h-8 w-64 skeleton mb-2" />
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="h-56 skeleton rounded-2xl" />
+          <div className="h-56 skeleton rounded-2xl" />
+        </div>
+        {[...Array(4)].map((_, i) => <div key={i} className="h-20 skeleton rounded-2xl" />)}
       </div>
     );
   }
@@ -75,6 +90,9 @@ export default function AnalysisResults() {
   if (!analysis) {
     return (
       <div className="glass-card p-12 text-center">
+        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-synergy-cyan/10 mb-4">
+          <MapPinIcon className="h-6 w-6 text-synergy-cyan" />
+        </div>
         <p className="text-synergy-muted">No analysis selected. Run an analysis from a project page.</p>
       </div>
     );
@@ -82,10 +100,25 @@ export default function AnalysisResults() {
 
   if (analysis.status === 'RUNNING' || analysis.status === 'PENDING') {
     return (
-      <div className="glass-card p-12 text-center">
-        <div className="h-10 w-10 border-2 border-synergy-cyan/30 border-t-synergy-cyan rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-synergy-text font-medium">Analysis running…</p>
-        <p className="text-synergy-muted text-sm mt-1">Ranking territories by net economic yield</p>
+      <div className="glass-card grain p-16 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-aurora opacity-50 pointer-events-none" />
+        <div className="relative">
+          <div className="inline-flex animate-float mb-6">
+            <SynergyMark size={56} animate={false} />
+          </div>
+          <p className="text-synergy-text font-semibold text-lg">Engineering your finance map…</p>
+          <p className="text-synergy-muted text-sm mt-2">Mapping qualified spend, applying treaties &amp; stacking, ranking by net yield.</p>
+          <div className="mt-6 flex items-center justify-center gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="h-2 w-2 rounded-full bg-synergy-cyan"
+                animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -119,13 +152,16 @@ export default function AnalysisResults() {
     ])),
   }));
 
+  const winner = results.find((r) => r.rank === 1);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
+          <p className="eyebrow mb-1.5">Optimised Output</p>
           <h1 className="page-title">{analysis.project_title}</h1>
-          <p className="text-synergy-muted text-sm mt-1">
+          <p className="text-synergy-muted text-sm mt-1.5">
             {results.length} territories ranked · {analysis.completed_at ? new Date(analysis.completed_at).toLocaleDateString() : ''}
           </p>
         </div>
@@ -147,22 +183,70 @@ export default function AnalysisResults() {
         </div>
       </div>
 
+      {/* Winner spotlight */}
+      {winner && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-2xl border border-synergy-gold/30 bg-synergy-card/70 backdrop-blur-xl p-6 grain"
+        >
+          <div className="absolute -top-16 -right-10 h-48 w-48 rounded-full bg-synergy-gold/15 blur-3xl pointer-events-none" />
+          <div className="relative flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-gold shadow-glow-gold">
+                <TrophyIcon className="h-6 w-6 text-synergy-darker" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-synergy-gold/80 font-semibold">Recommended Territory</p>
+                <p className="text-xl font-bold text-synergy-text">{winner.territory_name}</p>
+                <p className="text-xs text-synergy-muted">{winner.territory_region} · {winner.territory_incentive_type.replace('_', ' ').toLowerCase()}</p>
+              </div>
+            </div>
+            <div className="flex-1" />
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <p className="text-2xl font-bold gradient-text-gold">{fmtPct(winner.estimated_rebate_pct)}</p>
+                <p className="text-xs text-synergy-muted">effective rate</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-synergy-text">{fmt(winner.estimated_rebate, winner.currency)}</p>
+                <p className="text-xs text-synergy-muted">gross rebate</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-synergy-green">{fmt(winner.net_benefit, winner.currency)}</p>
+                <p className="text-xs text-synergy-muted">net benefit</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Charts */}
       {top5.length > 0 && (
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="glass-card p-6">
             <h2 className="section-title mb-4">Net Benefit Comparison</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={barData} barSize={28}>
+            <ResponsiveContainer width="100%" height={210}>
+              <BarChart data={barData} barSize={30}>
+                <defs>
+                  {COLORS.map((c, i) => (
+                    <linearGradient key={i} id={`abar-${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={c} stopOpacity={0.95} />
+                      <stop offset="100%" stopColor={c} stopOpacity={0.35} />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false}
                   tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v) => [fmt(Number(v)), '']}
+                  cursor={{ fill: 'rgba(34,211,238,0.06)' }}
+                  contentStyle={{ backgroundColor: 'rgba(20,30,51,0.95)', border: '1px solid #27324a', borderRadius: 10, fontSize: 12, backdropFilter: 'blur(8px)' }}
+                  formatter={(v) => [fmt(Number(v)), 'Net Benefit']}
                 />
-                <Bar dataKey="net" name="Net Benefit" radius={[4, 4, 0, 0]}>
-                  {barData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                <Bar dataKey="net" name="Net Benefit" radius={[6, 6, 0, 0]}>
+                  {barData.map((_, i) => <Cell key={i} fill={`url(#abar-${i % COLORS.length})`} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -196,7 +280,11 @@ export default function AnalysisResults() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: r.rank * 0.04 }}
-            className="glass-card overflow-hidden hover:border-synergy-cyan/20 transition-all"
+            className={`glass-card overflow-hidden transition-all duration-300 ${
+              r.rank === 1
+                ? 'border-synergy-gold/30 hover:shadow-glow-gold'
+                : 'hover:border-synergy-cyan/30 hover:shadow-glow-cyan'
+            }`}
           >
             <div className="p-5 flex items-center gap-4 cursor-pointer" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
               <RankBadge rank={r.rank} />
