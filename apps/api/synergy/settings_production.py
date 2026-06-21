@@ -31,8 +31,13 @@ DATABASES = {
     }
 }
 
+# Cloud Run terminates TLS and forwards plain HTTP internally.
+# This header tells Django the original request was HTTPS so it won't redirect.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 # Security headers
-SECURE_SSL_REDIRECT = True
+SECURE_SSL_REDIRECT = False  # Cloud Run handles SSL — don't double-redirect
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
