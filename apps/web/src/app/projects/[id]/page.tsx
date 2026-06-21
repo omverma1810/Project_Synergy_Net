@@ -9,6 +9,7 @@ import {
   ArrowLeftIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 import { api, ProjectDetail, Analysis, AnalysisResult } from '@/lib/api';
 import Layout from '@/components/Layout';
 
@@ -52,13 +53,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const handleAnalyze = async () => {
     if (!project) return;
     const budget = project.budgets?.[project.budgets.length - 1];
-    if (!budget) { alert('No budget found. Please upload a budget file or add spend estimates.'); return; }
+    if (!budget) { toast.error('No budget found. Upload a budget file or add spend estimates.'); return; }
     setAnalyzing(true);
+    const t = toast.loading('Starting analysis…');
     try {
       const analysis = await api.analysis.create(project.id, budget.id);
+      toast.success('Analysis started', { id: t });
       router.push(`/analysis?id=${analysis.id}`);
     } catch (e: unknown) {
-      alert((e as Error).message || 'Failed to start analysis');
+      toast.error((e as Error).message || 'Failed to start analysis', { id: t });
       setAnalyzing(false);
     }
   };
@@ -68,8 +71,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     try {
       const report = await api.reports.generate(analysisId, format);
       if (report.file_url) window.open(report.file_url, '_blank');
+      toast.success(`${format} report ready`);
     } catch (e: unknown) {
-      alert((e as Error).message || 'Report generation failed');
+      toast.error((e as Error).message || 'Report generation failed');
     } finally {
       setGeneratingReport(null);
     }
@@ -78,9 +82,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   if (loading) {
     return (
       <Layout>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-60 bg-synergy-card rounded-lg" />
-          <div className="h-48 bg-synergy-card rounded-2xl" />
+        <div className="h-8 w-60 skeleton mb-2" />
+        <div className="h-4 w-40 skeleton mb-6" />
+        <div className="h-10 w-72 skeleton mb-6 rounded-xl" />
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="h-56 skeleton rounded-2xl" />
+          <div className="h-56 skeleton rounded-2xl" />
         </div>
       </Layout>
     );
@@ -108,9 +115,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="page-title">{project.title}</h1>
-            <span className={STATUS_BADGES[project.status] || 'badge-muted'}>{project.status}</span>
+            <span className={STATUS_BADGES[project.status] || 'badge-muted'}>{project.status?.toLowerCase()}</span>
+            {project.vetting_status === 'APPROVED' && <span className="badge-green">vetted</span>}
+            {project.vetting_status === 'FLAGGED' && <span className="badge-red">flagged</span>}
           </div>
-          <p className="text-synergy-muted text-sm mt-1">{project.type} · {project.genre} · {project.language}</p>
+          <p className="text-synergy-muted text-sm mt-1 capitalize">{project.type?.toLowerCase()} · {project.genre} · {project.language}</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
@@ -119,7 +128,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           className="btn-primary flex items-center gap-2 shrink-0"
         >
           {analyzing
-            ? <span className="h-4 w-4 border-2 border-synergy-dark/30 border-t-synergy-dark rounded-full animate-spin" />
+            ? <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
             : <ChartBarIcon className="h-4 w-4" />
           }
           Run Analysis
@@ -127,15 +136,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-synergy-card/50 rounded-xl p-1 w-fit">
+      <div className="flex gap-1 mb-6 bg-synergy-card/40 border border-synergy-border/40 rounded-xl p-1 w-fit">
         {TABS.map((tab, i) => (
           <button key={tab} onClick={() => setActiveTab(i)}
             className={[
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-              activeTab === i ? 'bg-synergy-cyan text-synergy-dark' : 'text-synergy-muted hover:text-synergy-text',
+              'relative px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200',
+              activeTab === i ? 'text-synergy-darker' : 'text-synergy-muted hover:text-synergy-text',
             ].join(' ')}
           >
-            {tab}
+            {activeTab === i && (
+              <motion.span layoutId="projectTab" className="absolute inset-0 rounded-lg bg-gradient-cyan shadow-glow-cyan"
+                transition={{ type: 'spring', stiffness: 400, damping: 32 }} />
+            )}
+            <span className="relative">{tab}</span>
           </button>
         ))}
       </div>

@@ -33,6 +33,7 @@ export default function SettingsPage() {
     api.auth.me().then(user => {
       profileForm.reset({ first_name: user.first_name, last_name: user.last_name, company_name: (user as { company_name?: string }).company_name || '' });
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onProfileSubmit = async (data: ProfileData) => {
@@ -75,8 +76,9 @@ export default function SettingsPage() {
     <Layout>
       <div className="max-w-2xl">
         <div className="mb-8">
+          <p className="eyebrow mb-1.5">Account</p>
           <h1 className="page-title">Settings</h1>
-          <p className="text-synergy-muted text-sm mt-1">Manage your account and preferences</p>
+          <p className="text-synergy-muted text-sm mt-1.5">Manage your account and preferences</p>
         </div>
 
         <div className="space-y-6">
@@ -171,7 +173,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-synergy-muted">Territories</span>
-                <span className="text-synergy-text">15+ active</span>
+                <span className="text-synergy-text">16 active</span>
               </div>
             </div>
           </div>

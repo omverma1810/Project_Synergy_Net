@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckIcon, ChevronRightIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
+import { CheckIcon, ChevronRightIcon, ChevronLeftIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import Layout from '@/components/Layout';
 
@@ -90,19 +91,24 @@ export default function NewProjectPage() {
       if (budgetFile) {
         await api.projects.uploadBudget(project.id, budgetFile).catch(() => {});
       }
+      toast.success(`"${project.title}" created`);
       router.push(`/projects/${project.id}`);
     } catch (e: unknown) {
       setError((e as Error).message || 'Failed to create project');
+      toast.error('Could not create project');
       setSubmitting(false);
     }
   };
+
+  const spendTotal = estimates.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
   return (
     <Layout>
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
+          <p className="eyebrow mb-1.5">Producer Intake</p>
           <h1 className="page-title">New Project</h1>
-          <p className="text-synergy-muted text-sm mt-1">Set up your production for territory analysis</p>
+          <p className="text-synergy-muted text-sm mt-1.5">Set up your production for territory analysis</p>
         </div>
 
         {/* Steps */}
@@ -110,18 +116,29 @@ export default function NewProjectPage() {
           {STEPS.map((label, i) => (
             <div key={i} className="flex items-center flex-1 last:flex-none">
               <div className="flex flex-col items-center shrink-0">
-                <div className={[
-                  'h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300',
-                  i < step ? 'bg-synergy-green text-white' :
-                  i === step ? 'bg-synergy-cyan text-synergy-dark' :
-                  'bg-synergy-card border border-synergy-border text-synergy-muted',
-                ].join(' ')}>
+                <motion.div
+                  animate={{ scale: i === step ? 1.1 : 1 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  className={[
+                    'h-9 w-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300',
+                    i < step ? 'bg-gradient-to-br from-synergy-green to-emerald-600 text-white shadow-[0_0_16px_-4px_rgba(52,211,153,0.6)]' :
+                    i === step ? 'bg-gradient-cyan text-synergy-darker shadow-glow-cyan' :
+                    'bg-synergy-card border border-synergy-border text-synergy-muted',
+                  ].join(' ')}
+                >
                   {i < step ? <CheckIcon className="h-4 w-4" /> : i + 1}
-                </div>
-                <span className={`text-xs mt-1 whitespace-nowrap ${i === step ? 'text-synergy-cyan' : 'text-synergy-muted'}`}>{label}</span>
+                </motion.div>
+                <span className={`text-xs mt-1.5 whitespace-nowrap font-medium ${i === step ? 'text-synergy-cyan' : i < step ? 'text-synergy-green' : 'text-synergy-muted'}`}>{label}</span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`h-px flex-1 mx-3 mb-4 transition-colors duration-300 ${i < step ? 'bg-synergy-green' : 'bg-synergy-border'}`} />
+                <div className="h-0.5 flex-1 mx-3 mb-5 rounded-full bg-synergy-border overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-synergy-green to-synergy-cyan"
+                    initial={false}
+                    animate={{ width: i < step ? '100%' : '0%' }}
+                    transition={{ duration: 0.4 }}
+                  />
+                </div>
               )}
             </div>
           ))}
@@ -243,10 +260,18 @@ export default function NewProjectPage() {
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setEstimates(prev => [...prev, { category: '', amount: '' }])}
-                  className="btn-secondary text-xs mb-6">
-                  + Add Row
-                </button>
+                <div className="flex items-center justify-between mb-6">
+                  <button onClick={() => setEstimates(prev => [...prev, { category: '', amount: '' }])}
+                    className="btn-secondary text-xs">
+                    + Add Row
+                  </button>
+                  <div className="text-right">
+                    <p className="text-xs text-synergy-muted">Estimated qualified spend</p>
+                    <p className="text-lg font-bold gradient-text">
+                      {spendTotal.toLocaleString('en-US', { style: 'currency', currency: step1Data?.currency || 'USD', maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                </div>
                 <div className="flex justify-between">
                   <button onClick={back} className="btn-secondary flex items-center gap-2">
                     <ChevronLeftIcon className="h-4 w-4" /> Back
@@ -271,12 +296,40 @@ export default function NewProjectPage() {
               >
                 <div>
                   <label className="form-label">Budget File (PDF / CSV / XLSX)</label>
-                  <input type="file" accept=".pdf,.csv,.xlsx"
-                    onChange={e => setBudgetFile(e.target.files?.[0] || null)}
-                    className="form-input cursor-pointer file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-synergy-cyan/20 file:text-synergy-cyan file:text-xs"
-                  />
-                  <p className="text-xs text-synergy-muted mt-1">Optional if spend estimates are provided</p>
+                  <label className="group flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-synergy-border hover:border-synergy-cyan/50 hover:bg-synergy-cyan/[0.03] transition-all cursor-pointer py-8 px-4 text-center">
+                    <DocumentArrowUpIcon className="h-8 w-8 text-synergy-muted group-hover:text-synergy-cyan transition-colors" />
+                    {budgetFile ? (
+                      <span className="text-sm text-synergy-cyan font-medium">{budgetFile.name}</span>
+                    ) : (
+                      <>
+                        <span className="text-sm text-synergy-text font-medium">Drop your budget here or click to browse</span>
+                        <span className="text-xs text-synergy-muted">PDF, CSV or XLSX · optional if spend estimates provided</span>
+                      </>
+                    )}
+                    <input type="file" accept=".pdf,.csv,.xlsx"
+                      onChange={e => setBudgetFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
+
+                {/* Review summary */}
+                {step1Data && (
+                  <div className="rounded-xl bg-white/[0.03] border border-synergy-border/40 p-4 space-y-2">
+                    <p className="text-xs font-semibold text-synergy-text mb-1">Review</p>
+                    {[
+                      ['Title', step1Data.title],
+                      ['Type · Genre', `${step1Data.type.replace('_', ' ').toLowerCase()} · ${step1Data.genre}`],
+                      ['Total budget', Number(step1Data.total_budget).toLocaleString('en-US', { style: 'currency', currency: step1Data.currency, maximumFractionDigits: 0 })],
+                      ['Spend categories', `${estimates.filter(e => e.category && e.amount).length} · ${spendTotal.toLocaleString('en-US', { style: 'currency', currency: step1Data.currency, maximumFractionDigits: 0 })}`],
+                    ].map(([k, v]) => (
+                      <div key={k} className="flex justify-between text-xs">
+                        <span className="text-synergy-muted">{k}</span>
+                        <span className="text-synergy-text font-medium capitalize">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {error && (
                   <div className="rounded-lg bg-synergy-red/10 border border-synergy-red/20 px-3 py-2 text-sm text-synergy-red">{error}</div>

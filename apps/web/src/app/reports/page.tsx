@@ -24,9 +24,10 @@ export default function ReportsPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-40 bg-synergy-card rounded-lg" />
-          {[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-synergy-card rounded-2xl" />)}
+        <div className="h-8 w-40 skeleton mb-2" />
+        <div className="h-4 w-56 skeleton mb-8" />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-16 skeleton rounded-2xl" />)}
         </div>
       </Layout>
     );
@@ -36,8 +37,9 @@ export default function ReportsPage() {
     <Layout>
       <div className="flex items-center justify-between mb-8">
         <div>
+          <p className="eyebrow mb-1.5">Deliverables</p>
           <h1 className="page-title">Reports</h1>
-          <p className="text-synergy-muted text-sm mt-1">Generated analysis reports</p>
+          <p className="text-synergy-muted text-sm mt-1.5">{reports.length} generated {reports.length === 1 ? 'report' : 'reports'}</p>
         </div>
       </div>
 
@@ -55,9 +57,9 @@ export default function ReportsPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="glass-card p-4 flex items-center gap-4 hover:border-synergy-cyan/20 transition-all"
+              className="group glass-card p-4 flex items-center gap-4 transition-all duration-300 hover:border-synergy-cyan/30 hover:shadow-glow-cyan hover:-translate-y-0.5"
             >
-              <div className="h-10 w-10 rounded-xl bg-synergy-cyan/10 flex items-center justify-center shrink-0">
+              <div className="h-11 w-11 rounded-xl bg-synergy-cyan/10 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
                 <DocumentTextIcon className="h-5 w-5 text-synergy-cyan" />
               </div>
               <div className="flex-1 min-w-0">
