@@ -1,4 +1,4 @@
-name: Build & Deploy to Cloud Run
+name: CI/CD — Build, Migrate & Deploy
 
 on:
   push:
@@ -6,18 +6,23 @@ on:
   workflow_dispatch:
 
 env:
-  REGION: us-central1
+  PROJECT_ID: synergy-500111
+  REGION: asia-northeast1
   SERVICE_NAME: synergy-api
-  REGISTRY: us-central1-docker.pkg.dev
+  REGISTRY: asia-northeast1-docker.pkg.dev
   REPO: synergy-net
 
 jobs:
-  build-and-deploy:
-    name: Build, Push & Deploy
+  # ── Job 1: Deploy Backend to Cloud Run ────────────────────────────────────
+  deploy-backend:
+    name: Backend → Cloud Run
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+
+    outputs:
+      service_url: ${{ steps.deploy.outputs.url }}
 
     steps:
       - name: Checkout
@@ -34,11 +39,10 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-      - name: Set image variables
+      - name: Compute image tags
         id: vars
         run: |
-          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
-          IMAGE_BASE="${{ env.REGISTRY }}/${PROJECT_ID}/${{ env.REPO }}/api"
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/api"
           echo "image_base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
           echo "image_tag=${IMAGE_BASE}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
@@ -55,77 +59,105 @@ jobs:
           docker push "${{ steps.vars.outputs.image_tag }}"
           docker push "${{ steps.vars.outputs.image_base }}:latest"
 
-      - name: Delete old images (keep latest 5)
+      - name: Prune old images (keep 5 most recent)
         run: |
           IMAGE_BASE="${{ steps.vars.outputs.image_base }}"
-          # List all digests sorted by update time, skip first 5, delete the rest
-          OLD_DIGESTS=$(gcloud artifacts docker images list "${IMAGE_BASE}" \
+          OLD=$(gcloud artifacts docker images list "${IMAGE_BASE}" \
             --include-tags \
             --sort-by="~UPDATE_TIME" \
             --format="get(version)" \
             2>/dev/null | tail -n +6)
-
-          if [ -n "${OLD_DIGESTS}" ]; then
+          if [ -n "${OLD}" ]; then
             while IFS= read -r digest; do
-              echo "Deleting old image: ${digest}"
+              echo "Deleting: ${digest}"
               gcloud artifacts docker images delete "${IMAGE_BASE}@${digest}" \
-                --quiet --delete-tags 2>/dev/null || echo "  (skipped — already deleted)"
-            done <<< "${OLD_DIGESTS}"
+                --quiet --delete-tags 2>/dev/null || true
+            done <<< "${OLD}"
           else
-            echo "No old images to delete (≤5 images present)"
+            echo "≤5 images present — nothing to prune"
           fi
 
-      - name: Run database migrations via Cloud Run Job
+      - name: Run database migrations
         run: |
-          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
-          IMAGE_TAG="${{ steps.vars.outputs.image_tag }}"
-
-          # Create or update the migration job
+          # Create job on first run; update image on subsequent runs
           gcloud run jobs create migrate-job \
-            --image="${IMAGE_TAG}" \
+            --image="${{ steps.vars.outputs.image_tag }}" \
             --region="${{ env.REGION }}" \
-            --project="${PROJECT_ID}" \
-            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production" \
-            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_NAME=db-name:latest,DB_USER=db-user:latest" \
-            --command="python,manage.py,migrate,--noinput" \
+            --project="${{ env.PROJECT_ID }}" \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production,DB_PORT=6543,DB_NAME=postgres,CELERY_TASK_ALWAYS_EAGER=True" \
+            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_USER=db-user:latest,ALLOWED_HOSTS=allowed-hosts:latest,CORS_ALLOWED_ORIGINS=cors-origins:latest" \
             --max-retries=1 \
-            2>/dev/null || \
-          gcloud run jobs update migrate-job \
-            --image="${IMAGE_TAG}" \
+            --task-timeout=300 \
+            2>/dev/null \
+          || gcloud run jobs update migrate-job \
+            --image="${{ steps.vars.outputs.image_tag }}" \
             --region="${{ env.REGION }}" \
-            --project="${PROJECT_ID}" \
-            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production" \
-            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_NAME=db-name:latest,DB_USER=db-user:latest"
+            --project="${{ env.PROJECT_ID }}" \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production,DB_PORT=6543,DB_NAME=postgres,CELERY_TASK_ALWAYS_EAGER=True" \
+            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_USER=db-user:latest,ALLOWED_HOSTS=allowed-hosts:latest,CORS_ALLOWED_ORIGINS=cors-origins:latest"
 
-          # Execute and wait
           gcloud run jobs execute migrate-job \
             --region="${{ env.REGION }}" \
-            --project="${PROJECT_ID}" \
+            --project="${{ env.PROJECT_ID }}" \
             --wait
 
       - name: Deploy to Cloud Run
+        id: deploy
         run: |
-          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
-          IMAGE_TAG="${{ steps.vars.outputs.image_tag }}"
-
-          gcloud run deploy "${{ env.SERVICE_NAME }}" \
-            --image="${IMAGE_TAG}" \
+          URL=$(gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image="${{ steps.vars.outputs.image_tag }}" \
             --region="${{ env.REGION }}" \
-            --project="${PROJECT_ID}" \
+            --project="${{ env.PROJECT_ID }}" \
             --platform=managed \
             --allow-unauthenticated \
-            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production,CELERY_TASK_ALWAYS_EAGER=True" \
-            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_NAME=db-name:latest,DB_USER=db-user:latest" \
-            --min-instances=1 \
+            --set-env-vars="DJANGO_SETTINGS_MODULE=synergy.settings_production,DB_PORT=6543,DB_NAME=postgres,CELERY_TASK_ALWAYS_EAGER=True" \
+            --set-secrets="SECRET_KEY=django-secret-key:latest,DB_PASSWORD=db-password:latest,DB_HOST=db-host:latest,DB_USER=db-user:latest,ALLOWED_HOSTS=allowed-hosts:latest,CORS_ALLOWED_ORIGINS=cors-origins:latest" \
+            --min-instances=0 \
             --max-instances=10 \
             --memory=1Gi \
             --cpu=1 \
             --timeout=300 \
-            --port=8080
+            --port=8080 \
+            --format="value(status.url)")
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Backend live at: ${URL}"
 
-      - name: Print service URL
+  # ── Job 2: Deploy Frontend to Vercel (triggered after backend) ────────────
+  deploy-frontend:
+    name: Frontend → Vercel
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+
+      - name: Pull Vercel environment
         run: |
-          gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --region=${{ env.REGION }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --format="value(status.url)"
+          cd apps/web
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build frontend
+        run: |
+          cd apps/web
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        run: |
+          cd apps/web
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
