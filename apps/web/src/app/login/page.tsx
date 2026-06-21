@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 import { AuthShell } from '@/components/AuthShell';
 
 const schema = z.object({
@@ -27,22 +28,17 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.detail || json.non_field_errors?.[0] || 'Invalid credentials');
-        return;
-      }
+      const json = await api.auth.login(data.email, data.password);
       localStorage.setItem('auth_token', json.access);
       localStorage.setItem('refresh_token', json.refresh);
       document.cookie = `auth_token=${json.access}; path=/; SameSite=Lax`;
       router.push('/');
-    } catch {
-      setError('Network error. Please try again.');
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message || 'Invalid credentials');
+      } else {
+        setError('Network error. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

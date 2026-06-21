@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 import { AuthShell } from '@/components/AuthShell';
 
 const schema = z.object({
@@ -34,43 +35,21 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/register/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          company_name: data.company_name,
-          password: data.password,
-        }),
+      await api.auth.register({
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        company_name: data.company_name,
+        password: data.password,
       });
-      const json: Record<string, unknown> = await res.json();
-      if (!res.ok) {
-        const firstVal = Object.values(json)[0];
-        const fromArray = Array.isArray(firstVal) ? firstVal[0] : undefined;
-        const emailErr = Array.isArray(json.email) ? json.email[0] : undefined;
-        const msg = String(emailErr || json.detail || fromArray || 'Registration failed');
-        setError(msg);
-        return;
-      }
       // Auto-login after register
-      const loginRes = await fetch('/api/auth/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      });
-      if (loginRes.ok) {
-        const tokens = await loginRes.json();
-        localStorage.setItem('auth_token', tokens.access);
-        localStorage.setItem('refresh_token', tokens.refresh);
-        document.cookie = `auth_token=${tokens.access}; path=/; SameSite=Lax`;
-        router.push('/');
-      } else {
-        router.push('/login');
-      }
-    } catch {
-      setError('Network error. Please try again.');
+      const tokens = await api.auth.login(data.email, data.password);
+      localStorage.setItem('auth_token', tokens.access);
+      localStorage.setItem('refresh_token', tokens.refresh);
+      document.cookie = `auth_token=${tokens.access}; path=/; SameSite=Lax`;
+      router.push('/');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }

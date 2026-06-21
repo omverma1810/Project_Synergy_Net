@@ -1,4 +1,8 @@
-const API_BASE = '/api';
+// Default to the same-origin `/api` path so requests flow through the Next.js
+// rewrite proxy (see next.config.mjs) — no CORS needed, works locally, on
+// Vercel, and on Cloud Run. Override with an absolute base (must include /api)
+// only if you want the browser to call the backend directly.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
