@@ -4,16 +4,68 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from .models import Analysis, AnalysisResult
 from .serializers import AnalysisSerializer, AnalysisResultSerializer
-from .tasks import run_analysis
-from projects.models import Project
+from .tasks import run_analysis, ensure_budget_has_line_items
+from projects.models import Project, Budget
 
 
-class AnalysisListView(generics.ListAPIView):
+class AnalysisListCreateView(generics.ListCreateAPIView):
+    """GET: list the user's analyses (optionally filtered by ?project=).
+    POST: create an analysis for {project, budget} and run it immediately."""
     serializer_class = AnalysisSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Analysis.objects.filter(project__producer=self.request.user)
+        qs = Analysis.objects.filter(project__producer=self.request.user)
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        project_id = request.data.get('project')
+        budget_id = request.data.get('budget')
+
+        project = get_object_or_404(Project, pk=project_id, producer=request.user)
+
+        # Resolve budget: explicit id, else the project's most recent budget.
+        budget = None
+        if budget_id:
+            budget = get_object_or_404(Budget, pk=budget_id, project=project)
+        else:
+            budget = project.budgets.order_by('-created_at').first()
+
+        if not budget:
+            return Response(
+                {'detail': 'No budget found. Upload a budget file or add spend estimates first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Make sure the engine has line items to work with (synthesises from
+        # spend_estimates when the budget was created without extracted items).
+        ensure_budget_has_line_items(budget)
+        if not budget.line_items.exists():
+            return Response(
+                {'detail': 'Budget has no line items and no spend estimates to analyse.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        analysis = Analysis.objects.create(
+            project=project,
+            budget=budget,
+            triggered_by=Analysis.Trigger.USER,
+        )
+
+        # CELERY_TASK_ALWAYS_EAGER=True in production → runs synchronously.
+        # Guard so an engine error surfaces as a FAILED analysis the client can
+        # poll, rather than a 500 that loses the analysis id.
+        try:
+            run_analysis(analysis.id)
+        except Exception:  # noqa: BLE001 — status already set to FAILED in task
+            pass
+
+        analysis.refresh_from_db()
+        serializer = self.get_serializer(analysis)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class AnalysisDetailView(generics.RetrieveAPIView):
@@ -40,20 +92,28 @@ class TriggerAnalysisView(APIView):
 
     def post(self, request, project_id):
         project = get_object_or_404(Project, pk=project_id, producer=request.user)
-        budget = project.budgets.filter(extraction_status='EXTRACTED').first()
+        budget = (
+            project.budgets.filter(extraction_status='EXTRACTED').first()
+            or project.budgets.order_by('-created_at').first()
+        )
 
         if not budget:
             return Response(
-                {'error': 'No extracted budget found. Upload and process a budget first.'},
+                {'error': 'No budget found. Upload a budget or add spend estimates first.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        ensure_budget_has_line_items(budget)
         analysis = Analysis.objects.create(
             project=project,
             budget=budget,
             triggered_by=Analysis.Trigger.USER,
         )
 
-        run_analysis.delay(analysis.id)
+        try:
+            run_analysis(analysis.id)
+        except Exception:  # noqa: BLE001
+            pass
 
-        return Response({'analysis_id': analysis.id, 'status': 'PENDING'}, status=status.HTTP_202_ACCEPTED)
+        analysis.refresh_from_db()
+        return Response(AnalysisSerializer(analysis).data, status=status.HTTP_201_CREATED)

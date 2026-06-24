@@ -26,7 +26,25 @@ class ReportListView(generics.ListAPIView):
 class GenerateReportView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request, analysis_id):
+    # Map the client-facing format aliases to the stored Report.Format value.
+    FORMAT_ALIASES = {
+        'PDF': Report.Format.PDF,
+        'EXCEL': Report.Format.EXCEL,
+        'XLSX': Report.Format.EXCEL,
+        'XLS': Report.Format.EXCEL,
+        'JSON': Report.Format.JSON,
+    }
+
+    def post(self, request, analysis_id=None):
+        # analysis id may arrive via the URL or the request body.
+        if analysis_id is None:
+            analysis_id = request.data.get('analysis')
+        if analysis_id is None:
+            return Response(
+                {'error': 'An analysis id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         analysis = get_object_or_404(Analysis, pk=analysis_id, project__producer=request.user)
 
         if analysis.status != Analysis.Status.COMPLETE:
@@ -35,19 +53,20 @@ class GenerateReportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        report_format = request.data.get('format', 'PDF').upper()
+        raw_format = str(request.data.get('format', 'PDF')).upper()
+        report_format = self.FORMAT_ALIASES.get(raw_format)
+        if report_format is None:
+            return Response(
+                {'error': 'Invalid format. Use PDF or XLSX.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if report_format == Report.Format.PDF:
             content = PDFReportGenerator(analysis).generate()
             filename = f"report_{analysis.id}.pdf"
-        elif report_format == Report.Format.EXCEL:
+        else:
             content = ExcelReportGenerator(analysis).generate()
             filename = f"report_{analysis.id}.xlsx"
-        else:
-            return Response(
-                {'error': 'Invalid format. Use PDF or EXCEL.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         report = Report.objects.create(
             analysis=analysis,

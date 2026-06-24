@@ -6,7 +6,7 @@ from .engine import IncentiveEngine
 from territories.models import Territory
 
 
-def _ensure_budget_has_line_items(budget):
+def ensure_budget_has_line_items(budget):
     """Synthesize BudgetLineItems from project.spend_estimates if budget has none."""
     if budget.line_items.exists():
         return
@@ -30,6 +30,10 @@ def _ensure_budget_has_line_items(budget):
         BudgetLineItem.objects.bulk_create(items)
 
 
+# Backwards-compatible private alias.
+_ensure_budget_has_line_items = ensure_budget_has_line_items
+
+
 @shared_task
 def run_analysis(analysis_id):
     analysis = Analysis.objects.select_related('budget__project').get(id=analysis_id)
@@ -38,7 +42,7 @@ def run_analysis(analysis_id):
         analysis.started_at = timezone.now()
         analysis.save(update_fields=['status', 'started_at'])
 
-        _ensure_budget_has_line_items(analysis.budget)
+        ensure_budget_has_line_items(analysis.budget)
 
         engine = IncentiveEngine(analysis.budget)
         territories = Territory.objects.filter(status=Territory.Status.ACTIVE).prefetch_related(
