@@ -1,22 +1,46 @@
 import io
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.utils import timezone
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
+
+from analysis.insights import derive_risk_flags, risk_summary, build_finance_snapshot
 
 
 class PDFReportGenerator:
     def __init__(self, analysis):
         self.analysis = analysis
-        self.results = analysis.results.all().select_related('territory')
+        self.results = list(analysis.results.all().select_related('territory').order_by('rank'))
         self.project = analysis.project
 
-    def generate(self):
-        html_string = render_to_string('reports/analysis_report.html', {
+    def _build_context(self):
+        # Annotate each result with its derived risk profile for the template.
+        enriched = []
+        for r in self.results:
+            r.risk_flags = derive_risk_flags(r)
+            r.risk_level = risk_summary(r)
+            enriched.append(r)
+
+        snapshot = build_finance_snapshot(self.analysis)
+        producer = getattr(self.project, 'producer', None)
+        company = getattr(producer, 'company_name', '') if producer else ''
+
+        return {
             'project': self.project,
             'analysis': self.analysis,
-            'results': self.results,
-        })
+            'results': enriched,
+            'top_results': enriched[:5],
+            'winner': enriched[0] if enriched else None,
+            'snapshot': snapshot,
+            'company': company,
+            'producer': producer,
+            'generated_at': timezone.now(),
+            'year': timezone.now().year,
+        }
+
+    def generate(self):
+        html_string = render_to_string('reports/analysis_report.html', self._build_context())
         try:
             from weasyprint import HTML
         except ImportError as exc:

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Analysis, AnalysisResult
+from .insights import derive_risk_flags, risk_summary, build_finance_snapshot
 
 
 class AnalysisResultSerializer(serializers.ModelSerializer):
@@ -10,6 +11,8 @@ class AnalysisResultSerializer(serializers.ModelSerializer):
     )
     territory_region = serializers.CharField(source='territory.region', read_only=True)
     territory_incentive_type = serializers.CharField(source='territory.incentive_type', read_only=True)
+    risk_flags = serializers.SerializerMethodField()
+    risk_level = serializers.SerializerMethodField()
 
     class Meta:
         model = AnalysisResult
@@ -21,17 +24,30 @@ class AnalysisResultSerializer(serializers.ModelSerializer):
             'confidence_score', 'currency',
             'rebate_timing_months', 'loan_against_rebate_available',
             'financing_benefit_estimate', 'recoupment_priority',
-            'details', 'created_at',
+            'details', 'risk_flags', 'risk_level', 'created_at',
         ]
+
+    def get_risk_flags(self, obj):
+        return derive_risk_flags(obj)
+
+    def get_risk_level(self, obj):
+        return risk_summary(obj)
 
 
 class AnalysisSerializer(serializers.ModelSerializer):
     results = AnalysisResultSerializer(many=True, read_only=True)
     project_title = serializers.CharField(source='project.title', read_only=True)
+    project_currency = serializers.CharField(source='project.currency', read_only=True)
+    finance_snapshot = serializers.SerializerMethodField()
 
     class Meta:
         model = Analysis
         fields = [
-            'id', 'project', 'project_title', 'budget', 'status', 'triggered_by',
-            'started_at', 'completed_at', 'results', 'created_at',
+            'id', 'project', 'project_title', 'project_currency', 'budget', 'status', 'triggered_by',
+            'started_at', 'completed_at', 'results', 'finance_snapshot', 'created_at',
         ]
+
+    def get_finance_snapshot(self, obj):
+        if obj.status != Analysis.Status.COMPLETE:
+            return None
+        return build_finance_snapshot(obj)

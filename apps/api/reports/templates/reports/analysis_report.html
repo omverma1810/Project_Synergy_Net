@@ -2,69 +2,228 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Synergy Net - Analysis Report</title>
+    <title>Synergy Net — {{ project.title }} Incentive Report</title>
     <style>
-        @page { size: A4; margin: 2cm; }
-        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; }
-        .header { border-bottom: 3px solid #06b6d4; padding-bottom: 20px; margin-bottom: 30px; }
-        .logo { font-size: 24px; font-weight: bold; color: #0f172a; }
-        .subtitle { font-size: 14px; color: #64748b; }
-        h1 { font-size: 28px; color: #0f172a; margin-bottom: 10px; }
-        h2 { font-size: 18px; color: #06b6d4; margin-top: 30px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #1e3a5f; color: white; padding: 12px; text-align: left; font-size: 12px; }
-        td { padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
-        .rank-1 { background: #ecfdf5; }
-        .rank-2 { background: #f0f9ff; }
-        .rank-3 { background: #fffbeb; }
-        .footer { margin-top: 40px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        @page {
+            size: A4;
+            margin: 1.6cm 1.6cm 2.2cm 1.6cm;
+            @bottom-center {
+                content: "Synergy Net™  ·  Confidential Production Finance Intelligence  ·  Page " counter(page) " of " counter(pages);
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 8px;
+                color: #94a3b8;
+            }
+        }
+        * { box-sizing: border-box; }
+        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 11px; line-height: 1.5; }
+
+        /* ── Brand header ── */
+        .header { display: flex; align-items: center; justify-content: space-between;
+                  border-bottom: 3px solid #06b6d4; padding-bottom: 16px; margin-bottom: 8px; }
+        .brand { display: flex; align-items: center; }
+        .brand-mark { width: 34px; height: 34px; margin-right: 11px; }
+        .logo { font-size: 20px; font-weight: bold; color: #0f172a; letter-spacing: 0.5px; }
+        .logo .tm { font-size: 9px; vertical-align: super; color: #06b6d4; }
+        .subtitle { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; }
+        .header-meta { text-align: right; font-size: 9px; color: #64748b; }
+
+        h1 { font-size: 24px; color: #0f172a; margin: 22px 0 2px 0; }
+        .project-sub { color: #64748b; font-size: 11px; margin-bottom: 4px; }
+        .eyebrow { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #06b6d4; }
+        h2 { font-size: 14px; color: #0f172a; margin-top: 26px; padding-bottom: 6px;
+             border-bottom: 1px solid #e2e8f0; }
+
+        /* ── Finance snapshot ── */
+        .snapshot { display: flex; gap: 10px; margin-top: 14px; }
+        .metric { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; background: #f8fafc; }
+        .metric .label { font-size: 8px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
+        .metric .value { font-size: 17px; font-weight: bold; color: #0f172a; margin-top: 3px; }
+        .metric.accent { background: #ecfeff; border-color: #a5f3fc; }
+        .metric.accent .value { color: #0891b2; }
+        .metric.gap { background: #fff7ed; border-color: #fed7aa; }
+        .metric.gap .value { color: #c2410c; }
+
+        .bar { height: 22px; border-radius: 6px; overflow: hidden; margin-top: 14px; background: #e2e8f0; display: flex; }
+        .bar .seg-incentive { background: #06b6d4; height: 100%; }
+        .bar .seg-gap { background: #f59e0b; height: 100%; }
+        .bar-legend { margin-top: 7px; font-size: 9px; color: #64748b; }
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 0 12px; }
+        .dot.c { background: #06b6d4; } .dot.g { background: #f59e0b; }
+
+        /* ── Spotlight ── */
+        .spotlight { margin-top: 14px; border: 1px solid #fcd34d; background: #fffbeb;
+                     border-radius: 10px; padding: 14px 16px; }
+        .spotlight .tag { font-size: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #b45309; }
+        .spotlight .name { font-size: 16px; font-weight: bold; color: #0f172a; margin: 2px 0 8px 0; }
+        .spotlight-grid { display: flex; gap: 24px; }
+        .spotlight-grid .s-val { font-size: 14px; font-weight: bold; color: #0f172a; }
+        .spotlight-grid .s-lab { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* ── Tables ── */
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th { background: #0f172a; color: #fff; padding: 8px 9px; text-align: left; font-size: 9px;
+             text-transform: uppercase; letter-spacing: 0.5px; }
+        th.num, td.num { text-align: right; }
+        td { padding: 8px 9px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }
+        tr.rank-1 td { background: #ecfdf5; }
+        .rk { display: inline-block; width: 17px; height: 17px; line-height: 17px; text-align: center;
+              border-radius: 50%; font-weight: bold; font-size: 9px; color: #fff; background: #94a3b8; }
+        .rk.r1 { background: #f59e0b; } .rk.r2 { background: #64748b; } .rk.r3 { background: #b45309; }
+
+        /* ── Risk flags ── */
+        .risk-card { border: 1px solid #e2e8f0; border-radius: 9px; padding: 11px 13px; margin-top: 10px; }
+        .risk-head { font-size: 11px; font-weight: bold; color: #0f172a; margin-bottom: 7px; }
+        .flag { display: flex; align-items: baseline; margin-bottom: 5px; font-size: 9.5px; }
+        .pill { font-size: 7.5px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+                padding: 2px 6px; border-radius: 8px; margin-right: 8px; white-space: nowrap; min-width: 78px; text-align: center; }
+        .pill.low { background: #dcfce7; color: #15803d; }
+        .pill.medium { background: #fef9c3; color: #a16207; }
+        .pill.high { background: #fee2e2; color: #b91c1c; }
+        .flag .f-cat { font-weight: bold; color: #334155; margin-right: 4px; }
+        .flag .f-detail { color: #64748b; }
+
+        .disclaimer { margin-top: 28px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+        .page-break { page-break-before: always; }
     </style>
 </head>
 <body>
+    <!-- ── Branded header ── -->
     <div class="header">
-        <div class="logo">SYNERGY NET</div>
-        <div class="subtitle">Production Finance Intelligence Platform</div>
+        <div class="brand">
+            <svg class="brand-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#22d3ee"/>
+                        <stop offset="100%" stop-color="#a78bfa"/>
+                    </linearGradient>
+                </defs>
+                <circle cx="50" cy="50" r="44" fill="none" stroke="url(#g)" stroke-width="7"/>
+                <circle cx="50" cy="50" r="13" fill="url(#g)"/>
+                <circle cx="50" cy="14" r="6" fill="#22d3ee"/>
+                <circle cx="81" cy="68" r="6" fill="#a78bfa"/>
+                <circle cx="19" cy="68" r="6" fill="#34d399"/>
+            </svg>
+            <div>
+                <div class="logo">SYNERGY NET<span class="tm">™</span></div>
+                <div class="subtitle">Production Finance Intelligence</div>
+            </div>
+        </div>
+        <div class="header-meta">
+            Generated {{ generated_at|date:"F j, Y" }}<br>
+            {% if company %}{{ company }}<br>{% endif %}
+            Report&nbsp;#{{ analysis.id }}
+        </div>
     </div>
 
+    <div class="eyebrow">Incentive &amp; Financing Analysis</div>
     <h1>{{ project.title }}</h1>
-    <p>
-        Analysis Date: {{ analysis.created_at|date:"F j, Y" }}<br>
-        Project Type: {{ project.get_type_display }}<br>
-        Total Budget: {{ project.total_budget }} {{ project.currency }}
-    </p>
+    <div class="project-sub">
+        {{ project.get_type_display }}{% if project.genre %} · {{ project.genre|title }}{% endif %}
+        {% if project.language %} · {{ project.language }}{% endif %}
+        · Total budget {{ project.total_budget|floatformat:0 }} {{ project.currency }}
+    </div>
 
-    <h2>Territory Rankings</h2>
+    {% if snapshot %}
+    <!-- ── Finance snapshot ── -->
+    <h2>Finance Snapshot</h2>
+    <div class="snapshot">
+        <div class="metric">
+            <div class="label">Total Budget</div>
+            <div class="value">{{ snapshot.total_budget|floatformat:0 }}</div>
+            <div class="label">{{ snapshot.currency }}</div>
+        </div>
+        <div class="metric accent">
+            <div class="label">Est. Incentive Value</div>
+            <div class="value">{{ snapshot.estimated_incentive|floatformat:0 }}</div>
+            <div class="label">{{ snapshot.incentive_pct_of_budget }}% of budget · {{ snapshot.top_territory }}</div>
+        </div>
+        <div class="metric gap">
+            <div class="label">Remaining Finance Gap</div>
+            <div class="value">{{ snapshot.finance_gap|floatformat:0 }}</div>
+            <div class="label">{{ snapshot.gap_pct_of_budget }}% to raise</div>
+        </div>
+    </div>
+
+    <div class="bar">
+        <div class="seg-incentive" style="width: {{ snapshot.incentive_pct_of_budget }}%;"></div>
+        <div class="seg-gap" style="width: {{ snapshot.gap_pct_of_budget }}%;"></div>
+    </div>
+    <div class="bar-legend">
+        <span class="dot c"></span>Incentive-covered ({{ snapshot.incentive_pct_of_budget }}%)
+        <span class="dot g"></span>Finance gap ({{ snapshot.gap_pct_of_budget }}%)
+        &nbsp;·&nbsp; Present value of rebate financing: {{ snapshot.financing_pv|floatformat:0 }} {{ snapshot.currency }}
+        ({{ snapshot.rebate_timing_months }}-month payout)
+    </div>
+    {% endif %}
+
+    {% if winner %}
+    <!-- ── Recommended territory ── -->
+    <div class="spotlight">
+        <div class="tag">★ Recommended Territory</div>
+        <div class="name">{{ winner.territory.name }} ({{ winner.territory.country_code }})</div>
+        <div class="spotlight-grid">
+            <div><div class="s-val">{{ winner.estimated_rebate_pct|floatformat:1 }}%</div><div class="s-lab">Effective Rate</div></div>
+            <div><div class="s-val">{{ winner.estimated_rebate|floatformat:0 }} {{ winner.currency }}</div><div class="s-lab">Gross Rebate</div></div>
+            <div><div class="s-val">{{ winner.net_benefit|floatformat:0 }} {{ winner.currency }}</div><div class="s-lab">Net Benefit</div></div>
+            <div><div class="s-val">{{ winner.rebate_timing_months }} mo</div><div class="s-lab">Payout</div></div>
+            <div><div class="s-val">{{ winner.confidence_score|floatformat:0 }}%</div><div class="s-lab">Confidence</div></div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Comparison table ── -->
+    <h2>Territory Comparison</h2>
     <table>
         <thead>
             <tr>
-                <th>Rank</th>
+                <th>#</th>
                 <th>Territory</th>
-                <th>Rebate</th>
-                <th>Qualified Spend</th>
-                <th>Est. Rebate</th>
-                <th>Logistics</th>
-                <th>Net Benefit</th>
-                <th>Confidence</th>
+                <th class="num">Eff. Rate</th>
+                <th class="num">Qualified Spend</th>
+                <th class="num">Est. Rebate</th>
+                <th class="num">Logistics</th>
+                <th class="num">Net Benefit</th>
+                <th class="num">Payout</th>
             </tr>
         </thead>
         <tbody>
             {% for result in results %}
-            <tr class="{% if result.rank <= 3 %}rank-{{ result.rank }}{% endif %}">
-                <td><strong>#{{ result.rank }}</strong></td>
-                <td>{{ result.territory.name }} ({{ result.territory.country_code }})</td>
-                <td>{{ result.territory.base_percentage }}%</td>
-                <td>{{ result.qualified_spend_total }} {{ result.currency }}</td>
-                <td>{{ result.estimated_rebate }} {{ result.currency }}</td>
-                <td>{{ result.logistics_premium }} {{ result.currency }}</td>
-                <td><strong>{{ result.net_benefit }} {{ result.currency }}</strong></td>
-                <td>{{ result.confidence_score }}%</td>
+            <tr class="{% if result.rank == 1 %}rank-1{% endif %}">
+                <td><span class="rk r{{ result.rank }}">{{ result.rank }}</span></td>
+                <td><strong>{{ result.territory.name }}</strong><br><span style="color:#94a3b8;font-size:8.5px;">{{ result.territory.region }}</span></td>
+                <td class="num">{{ result.estimated_rebate_pct|floatformat:1 }}%</td>
+                <td class="num">{{ result.qualified_spend_total|floatformat:0 }}</td>
+                <td class="num">{{ result.estimated_rebate|floatformat:0 }}</td>
+                <td class="num">−{{ result.logistics_premium|floatformat:0 }}</td>
+                <td class="num"><strong>{{ result.net_benefit|floatformat:0 }}</strong></td>
+                <td class="num">{{ result.rebate_timing_months }} mo</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    <div style="font-size:8px;color:#94a3b8;margin-top:6px;">All figures in each territory's reporting currency. Net benefit = estimated rebate − modelled logistics premium.</div>
 
-    <div class="footer">
-        Generated by Synergy Net | Confidential | synergy-medialabs.com
+    <!-- ── Risk & considerations ── -->
+    <div class="page-break"></div>
+    <div class="eyebrow">Due Diligence</div>
+    <h2>Risk &amp; Considerations — Top {{ top_results|length }} Territories</h2>
+    {% for result in top_results %}
+    <div class="risk-card">
+        <div class="risk-head"><span class="rk r{{ result.rank }}">{{ result.rank }}</span>&nbsp; {{ result.territory.name }}</div>
+        {% for flag in result.risk_flags %}
+        <div class="flag">
+            <span class="pill {{ flag.level }}">{{ flag.level }} risk</span>
+            <span><span class="f-cat">{{ flag.category }}:</span><span>{{ flag.label }}.</span> <span class="f-detail">{{ flag.detail }}</span></span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="disclaimer">
+        <strong>Disclaimer.</strong> This report is generated by Synergy Net™ for informational purposes only and does not
+        constitute financial, legal, or tax advice. Incentive rates, eligibility rules, and payout timelines change frequently;
+        all figures are modelled estimates that must be confirmed with the relevant film commission and qualified local advisors
+        before any production-financing decision. © {{ year }} Synergy Net™. All rights reserved. Confidential.
     </div>
 </body>
 </html>
