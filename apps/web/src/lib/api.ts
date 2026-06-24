@@ -109,6 +109,14 @@ export const api = {
         body: JSON.stringify({ analysis: analysisId, format }),
       }),
   },
+
+  advisor: {
+    ask: (question: string) =>
+      request<{ answer: string }>('/advisor/', {
+        method: 'POST',
+        body: JSON.stringify({ question }),
+      }),
+  },
 };
 
 // ── Type definitions ────────────────────────────────────────────────────────

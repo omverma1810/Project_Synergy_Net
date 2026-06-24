@@ -26,6 +26,18 @@ class PDFReportGenerator:
         producer = getattr(self.project, 'producer', None)
         company = getattr(producer, 'company_name', '') if producer else ''
 
+        # Build a territory-id → territory detail map for the top results, so the
+        # template can render film commission links and government support without
+        # extra DB queries per row.
+        top_territory_ids = [r.territory_id for r in enriched[:5]]
+        from territories.models import Territory
+        territory_detail_map = {
+            t.id: t
+            for t in Territory.objects.filter(id__in=top_territory_ids)
+        }
+        for r in enriched:
+            r.territory_detail = territory_detail_map.get(r.territory_id)
+
         return {
             'project': self.project,
             'analysis': self.analysis,

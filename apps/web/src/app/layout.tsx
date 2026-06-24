@@ -3,6 +3,9 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Toaster } from "sonner";
+import dynamic from "next/dynamic";
+
+const SynergyAdvisor = dynamic(() => import("@/components/SynergyAdvisor"), { ssr: false });
 
 export const metadata: Metadata = {
   title: "Synergy Net — Production Finance Intelligence",
@@ -16,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="app-aurora bg-synergy-dark text-synergy-text antialiased font-sans">
         <div className="relative z-10">{children}</div>
+        <SynergyAdvisor />
         <Toaster
           theme="dark"
           position="bottom-right"
