@@ -16,7 +16,7 @@ let _refreshing: Promise<void> | null = null;
 async function _doRefresh(): Promise<void> {
   const refresh = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
   if (!refresh) {
-    _redirectToLogin();
+    _clearTokens();
     throw new Error('Session expired. Please sign in again.');
   }
   const res = await fetch(`${API_BASE}/auth/token/refresh/`, {
@@ -25,7 +25,7 @@ async function _doRefresh(): Promise<void> {
     body: JSON.stringify({ refresh }),
   });
   if (!res.ok) {
-    _redirectToLogin();
+    _clearTokens();
     throw new Error('Session expired. Please sign in again.');
   }
   const data = await res.json();
@@ -33,12 +33,21 @@ async function _doRefresh(): Promise<void> {
   document.cookie = `auth_token=${data.access}; path=/; SameSite=Lax`;
 }
 
-function _redirectToLogin() {
+function _clearTokens() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('auth_token');
   localStorage.removeItem('refresh_token');
   document.cookie = 'auth_token=; path=/; max-age=0';
-  window.location.href = '/login';
+}
+
+function _redirectToLogin() {
+  _clearTokens();
+  // Defer navigation so any in-flight fetches complete cleanly before the
+  // page unloads — prevents Safari "Load failed" / "The network connection
+  // was lost" errors when window.location changes mid-request.
+  if (typeof window !== 'undefined') {
+    setTimeout(() => { window.location.href = '/login'; }, 100);
+  }
 }
 
 function _makeHeaders(isFormData: boolean): Record<string, string> {
@@ -61,8 +70,14 @@ async function request<T>(
 
   // Transparent token refresh on 401
   if (res.status === 401) {
-    if (!_refreshing) _refreshing = _doRefresh().finally(() => { _refreshing = null; });
-    await _refreshing;
+    try {
+      if (!_refreshing) _refreshing = _doRefresh().finally(() => { _refreshing = null; });
+      await _refreshing;
+    } catch {
+      // Tokens cleared in _doRefresh; schedule deferred redirect after error propagates
+      _redirectToLogin();
+      throw new Error('Session expired. Please sign in again.');
+    }
 
     // Retry original request with the newly-issued access token
     const retry = await fetch(`${API_BASE}${path}`, {

@@ -12,7 +12,7 @@ class Report(models.Model):
 
     analysis = models.ForeignKey('analysis.Analysis', on_delete=models.CASCADE, related_name='reports')
     format = models.CharField(max_length=10, choices=Format.choices)
-    file = models.FileField(upload_to='reports/%Y/%m/')
+    file = models.FileField(upload_to='reports/%Y/%m/', null=True, blank=True)
     file_size = models.IntegerField(null=True, blank=True)
     generated_at = models.DateTimeField(auto_now_add=True)
     generated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

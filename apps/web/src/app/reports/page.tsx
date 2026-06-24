@@ -5,6 +5,23 @@ import { DocumentArrowDownIcon, DocumentTextIcon } from '@heroicons/react/24/out
 import { api, Report } from '@/lib/api';
 import Layout from '@/components/Layout';
 
+async function downloadReport(report: Report) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const res = await fetch(report.file_url!, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Download failed');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `synergy_report_${report.id}.${report.format === 'PDF' ? 'pdf' : 'xlsx'}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const FORMAT_COLORS: Record<string, string> = {
   PDF: 'badge-red',
   XLSX: 'badge-green',
@@ -72,17 +89,15 @@ export default function ReportsPage() {
                 </div>
               </div>
               {report.file_url && (
-                <motion.a
-                  href={report.file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <motion.button
+                  onClick={() => downloadReport(report)}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   className="btn-secondary flex items-center gap-2 shrink-0"
                 >
                   <DocumentArrowDownIcon className="h-4 w-4" />
                   Download
-                </motion.a>
+                </motion.button>
               )}
             </motion.div>
           ))}

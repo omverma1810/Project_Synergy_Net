@@ -70,7 +70,23 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setGeneratingReport(format);
     try {
       const report = await api.reports.generate(analysisId, format);
-      if (report.file_url) window.open(report.file_url, '_blank');
+      if (report.file_url) {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const res = await fetch(report.file_url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `synergy_report_${report.id}.${format.toLowerCase()}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      }
       toast.success(`${format} report ready`);
     } catch (e: unknown) {
       toast.error((e as Error).message || 'Report generation failed');
