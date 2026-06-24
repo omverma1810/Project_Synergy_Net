@@ -9,20 +9,73 @@ function getToken(): string | null {
   return localStorage.getItem('auth_token');
 }
 
+// Shared in-flight refresh promise so concurrent expiry doesn't trigger
+// multiple simultaneous refresh calls.
+let _refreshing: Promise<void> | null = null;
+
+async function _doRefresh(): Promise<void> {
+  const refresh = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+  if (!refresh) {
+    _redirectToLogin();
+    throw new Error('Session expired. Please sign in again.');
+  }
+  const res = await fetch(`${API_BASE}/auth/token/refresh/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  });
+  if (!res.ok) {
+    _redirectToLogin();
+    throw new Error('Session expired. Please sign in again.');
+  }
+  const data = await res.json();
+  localStorage.setItem('auth_token', data.access);
+  document.cookie = `auth_token=${data.access}; path=/; SameSite=Lax`;
+}
+
+function _redirectToLogin() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('refresh_token');
+  document.cookie = 'auth_token=; path=/; max-age=0';
+  window.location.href = '/login';
+}
+
+function _makeHeaders(isFormData: boolean): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (!isFormData) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   isFormData = false,
 ): Promise<T> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (!isFormData) headers['Content-Type'] = 'application/json';
-
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { ...headers, ...(options.headers as Record<string, string> || {}) },
+    headers: { ..._makeHeaders(isFormData), ...(options.headers as Record<string, string> || {}) },
   });
+
+  // Transparent token refresh on 401
+  if (res.status === 401) {
+    if (!_refreshing) _refreshing = _doRefresh().finally(() => { _refreshing = null; });
+    await _refreshing;
+
+    // Retry original request with the newly-issued access token
+    const retry = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: { ..._makeHeaders(isFormData), ...(options.headers as Record<string, string> || {}) },
+    });
+    if (!retry.ok) {
+      const err = await retry.json().catch(() => ({ detail: retry.statusText }));
+      throw Object.assign(new Error(err.detail || 'Request failed'), { status: retry.status, data: err });
+    }
+    if (retry.status === 204) return undefined as T;
+    return retry.json();
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));

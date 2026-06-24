@@ -94,8 +94,9 @@ export default function NewProjectPage() {
       toast.success(`"${project.title}" created`);
       router.push(`/projects/${project.id}`);
     } catch (e: unknown) {
-      setError((e as Error).message || 'Failed to create project');
-      toast.error('Could not create project');
+      const msg = (e as Error).message || 'Failed to create project';
+      setError(msg);
+      toast.error(msg);
       setSubmitting(false);
     }
   };
