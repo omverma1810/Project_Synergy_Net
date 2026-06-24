@@ -190,6 +190,10 @@ export interface Territory {
   sci_fi_eligible: boolean;
   official_url: string;
   last_verified_at: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  film_commission: string;
+  film_commission_url: string;
 }
 
 export interface TerritoryDetail extends Territory {
@@ -198,6 +202,8 @@ export interface TerritoryDetail extends Territory {
   genre_profiles: GenreProfile[];
   partners: TerritoryPartner[];
   description: string;
+  government_support: string;
+  local_associations: { name: string; url: string }[];
 }
 
 export interface TerritoryRule {
