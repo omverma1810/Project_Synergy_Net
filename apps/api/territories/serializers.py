@@ -52,6 +52,7 @@ class TerritoryListSerializer(serializers.ModelSerializer):
             'loan_against_rebate_available',
             'documentary_eligible', 'animation_eligible', 'streaming_eligible', 'sci_fi_eligible',
             'official_url', 'last_verified_at',
+            'latitude', 'longitude', 'film_commission', 'film_commission_url',
         ]
 
 

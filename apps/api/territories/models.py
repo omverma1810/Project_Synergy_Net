@@ -50,6 +50,22 @@ class Territory(models.Model):
     # Local crew requirement
     min_local_crew_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
+    # Geographic coordinates of the primary production hub (for the world map)
+    latitude = models.DecimalField(max_digits=8, decimal_places=5, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=8, decimal_places=5, null=True, blank=True)
+
+    # Local support: film commission / government boards / industry associations
+    film_commission = models.CharField(max_length=150, blank=True)
+    film_commission_url = models.URLField(blank=True)
+    government_support = models.TextField(
+        blank=True,
+        help_text='Notes on local government / board support, soft money, and on-the-ground assistance.',
+    )
+    local_associations = models.JSONField(
+        default=list, blank=True,
+        help_text='List of {name, url} for film/media associations and guilds.',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
