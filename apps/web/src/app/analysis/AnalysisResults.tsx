@@ -3,15 +3,29 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { ChevronDownIcon, DocumentArrowDownIcon, ClockIcon, BanknotesIcon, TrophyIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, DocumentArrowDownIcon, ClockIcon, BanknotesIcon, TrophyIcon, MapPinIcon, ShieldExclamationIcon, ScaleIcon } from '@heroicons/react/24/outline';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
+  PieChart, Pie,
 } from 'recharts';
-import { api, Analysis, AnalysisResult } from '@/lib/api';
+import { api, Analysis, AnalysisResult, RiskFlag } from '@/lib/api';
 import { SynergyMark } from '@/components/Brand';
 
 const COLORS = ['#22d3ee', '#3b82f6', '#a78bfa', '#34d399', '#fbbf24', '#f87171'];
+const RISK_STYLES: Record<string, string> = {
+  low: 'bg-synergy-green/10 text-synergy-green border border-synergy-green/30',
+  medium: 'bg-synergy-gold/10 text-synergy-gold border border-synergy-gold/30',
+  high: 'bg-synergy-red/10 text-synergy-red border border-synergy-red/30',
+};
+
+function RiskPill({ level }: { level: string }) {
+  return (
+    <span className={`badge ${RISK_STYLES[level] || RISK_STYLES.medium} text-[10px] capitalize`}>
+      {level} risk
+    </span>
+  );
+}
 
 function fmtPct(n: string | number) {
   return `${parseFloat(String(n)).toFixed(1)}%`;
@@ -134,6 +148,8 @@ export default function AnalysisResults() {
 
   const results = analysis.results || [];
   const top5 = results.slice(0, 5);
+  const snapshot = analysis.finance_snapshot;
+  const compare = results.slice(0, 4);
 
   // Chart data
   const barData = top5.map(r => ({
@@ -220,6 +236,146 @@ export default function AnalysisResults() {
             </div>
           </div>
         </motion.div>
+      )}
+
+      {/* Finance snapshot */}
+      {snapshot && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="glass-card p-5 sm:p-6"
+        >
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <BanknotesIcon className="h-5 w-5 text-synergy-cyan" />
+              <h2 className="section-title">Finance Snapshot</h2>
+            </div>
+            <span className="badge-muted">vs. {fmt(snapshot.total_budget, snapshot.currency)} budget · {snapshot.top_territory}</span>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-6 items-center">
+            {/* Donut: budget composition */}
+            <div className="flex items-center gap-4">
+              <div className="relative h-[160px] w-[160px] shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Incentive-covered', value: snapshot.estimated_incentive },
+                        { name: 'Finance gap', value: snapshot.finance_gap },
+                      ]}
+                      dataKey="value"
+                      innerRadius={52}
+                      outerRadius={76}
+                      paddingAngle={2}
+                      stroke="none"
+                      startAngle={90}
+                      endAngle={-270}
+                    >
+                      <Cell fill="#22d3ee" />
+                      <Cell fill="#f59e0b" />
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'rgba(20,30,51,0.95)', border: '1px solid #27324a', borderRadius: 10, fontSize: 12 }}
+                      formatter={(v) => fmt(Number(v), snapshot.currency)}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-bold gradient-text">{snapshot.incentive_pct_of_budget}%</span>
+                  <span className="text-[10px] text-synergy-muted">covered</span>
+                </div>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-synergy-cyan" />
+                  <span className="text-synergy-muted">Incentive</span>
+                  <span className="text-synergy-text font-medium ml-auto">{fmt(snapshot.estimated_incentive, snapshot.currency)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-synergy-gold" />
+                  <span className="text-synergy-muted">Finance gap</span>
+                  <span className="text-synergy-text font-medium ml-auto">{fmt(snapshot.finance_gap, snapshot.currency)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Metric tiles */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Total Budget', value: fmt(snapshot.total_budget, snapshot.currency), tone: 'text-synergy-text' },
+                { label: 'Est. Incentive', value: fmt(snapshot.estimated_incentive, snapshot.currency), tone: 'text-synergy-cyan' },
+                { label: 'Finance Gap', value: fmt(snapshot.finance_gap, snapshot.currency), tone: 'text-synergy-gold' },
+                { label: `Rebate PV (${snapshot.rebate_timing_months}mo)`, value: fmt(snapshot.financing_pv, snapshot.currency), tone: 'text-synergy-green' },
+              ].map((m) => (
+                <div key={m.label} className="glass-card-light p-3">
+                  <p className="text-[10px] text-synergy-muted uppercase tracking-wide">{m.label}</p>
+                  <p className={`text-base font-bold mt-1 ${m.tone} truncate`}>{m.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {snapshot.loan_against_rebate_available && (
+            <p className="mt-4 text-xs text-synergy-muted flex items-center gap-1.5">
+              <span className="badge-green text-[10px]">Financing</span>
+              A loan against the rebate is available in {snapshot.top_territory} to bridge the {snapshot.rebate_timing_months}-month payout.
+            </p>
+          )}
+        </motion.div>
+      )}
+
+      {/* Side-by-side comparison matrix */}
+      {top5.length > 1 && (
+        <div className="glass-card p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ScaleIcon className="h-5 w-5 text-synergy-cyan" />
+            <h2 className="section-title">Territory Comparison</h2>
+          </div>
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-sm border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th className="text-left py-2 pr-3 text-synergy-muted font-medium text-xs sticky left-0 bg-synergy-card/0">Metric</th>
+                  {compare.map((r, i) => (
+                    <th key={r.id} className="py-2 px-3 text-center min-w-[110px]">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className={i === 0 ? 'rank-badge-1' : i === 1 ? 'rank-badge-2' : i === 2 ? 'rank-badge-3' : 'rank-badge-other'}>#{r.rank}</span>
+                        <span className="text-xs font-semibold text-synergy-text leading-tight">{r.territory_name.split('—')[0].trim()}</span>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {([
+                  ['Effective rate', (r: AnalysisResult) => `${parseFloat(r.estimated_rebate_pct).toFixed(1)}%`, 'text-synergy-cyan'],
+                  ['Gross rebate', (r: AnalysisResult) => fmt(r.estimated_rebate, r.currency), 'text-synergy-text'],
+                  ['Logistics premium', (r: AnalysisResult) => `−${fmt(r.logistics_premium, r.currency)}`, 'text-synergy-muted'],
+                  ['Net benefit', (r: AnalysisResult) => fmt(r.net_benefit, r.currency), 'text-synergy-green'],
+                  ['Payout', (r: AnalysisResult) => `${r.rebate_timing_months} mo`, 'text-synergy-text'],
+                  ['Rebate PV', (r: AnalysisResult) => fmt(r.financing_benefit_estimate, r.currency), 'text-synergy-text'],
+                  ['Confidence', (r: AnalysisResult) => `${Math.round(parseFloat(r.confidence_score) * 100)}%`, 'text-synergy-text'],
+                ] as [string, (r: AnalysisResult) => string, string][]).map(([label, accessor, tone]) => (
+                  <tr key={label}>
+                    <td className="py-2 pr-3 text-synergy-muted text-xs whitespace-nowrap border-t border-synergy-border/30">{label}</td>
+                    {compare.map((r) => (
+                      <td key={r.id} className={`py-2 px-3 text-center font-medium ${tone} border-t border-synergy-border/30`}>{accessor(r)}</td>
+                    ))}
+                  </tr>
+                ))}
+                <tr>
+                  <td className="py-2 pr-3 text-synergy-muted text-xs border-t border-synergy-border/30">Overall risk</td>
+                  {compare.map((r) => (
+                    <td key={r.id} className="py-2 px-3 text-center border-t border-synergy-border/30">
+                      <RiskPill level={r.risk_level} />
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Charts */}
@@ -383,6 +539,28 @@ export default function AnalysisResults() {
                                 {item.deadline_type?.replace(/_/g, ' ').toLowerCase()}
                               </span>
                               <span className="text-synergy-muted">{item.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Risk & considerations */}
+                    {r.risk_flags?.length > 0 && (
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <p className="text-xs font-semibold text-synergy-text mb-2 flex items-center gap-1.5">
+                          <ShieldExclamationIcon className="h-4 w-4 text-synergy-muted" />
+                          Risk &amp; Considerations
+                        </p>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {r.risk_flags.map((flag: RiskFlag) => (
+                            <div key={flag.key} className="rounded-lg bg-white/[0.03] border border-synergy-border/40 p-2.5">
+                              <div className="flex items-center gap-2 mb-1">
+                                <RiskPill level={flag.level} />
+                                <span className="text-[11px] font-medium text-synergy-text">{flag.category}</span>
+                              </div>
+                              <p className="text-[11px] text-synergy-text/90">{flag.label}</p>
+                              <p className="text-[10px] text-synergy-muted mt-0.5 leading-snug">{flag.detail}</p>
                             </div>
                           ))}
                         </div>

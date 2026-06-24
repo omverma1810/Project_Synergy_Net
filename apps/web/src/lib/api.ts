@@ -248,16 +248,42 @@ export interface PolicyAlert {
   created_at: string;
 }
 
+export interface FinanceSnapshot {
+  currency: string;
+  total_budget: number;
+  top_territory: string;
+  top_territory_id: number;
+  estimated_incentive: number;
+  financing_pv: number;
+  net_benefit: number;
+  finance_gap: number;
+  incentive_pct_of_budget: number;
+  gap_pct_of_budget: number;
+  rebate_timing_months: number;
+  loan_against_rebate_available: boolean;
+}
+
+export interface RiskFlag {
+  key: string;
+  category: string;
+  level: 'low' | 'medium' | 'high';
+  tone: string;
+  label: string;
+  detail: string;
+}
+
 export interface Analysis {
   id: number;
   project: number;
   project_title: string;
+  project_currency: string;
   budget: number;
   status: string;
   triggered_by: string;
   started_at: string | null;
   completed_at: string | null;
   results: AnalysisResult[];
+  finance_snapshot: FinanceSnapshot | null;
   created_at: string;
 }
 
@@ -282,6 +308,8 @@ export interface AnalysisResult {
   loan_against_rebate_available: boolean;
   financing_benefit_estimate: string;
   recoupment_priority: string;
+  risk_flags: RiskFlag[];
+  risk_level: 'low' | 'medium' | 'high';
   details: {
     category_breakdown: Record<string, { qualified: number; total: number }>;
     checklist_items: ComplianceItem[];
