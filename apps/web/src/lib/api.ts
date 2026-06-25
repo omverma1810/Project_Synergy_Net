@@ -126,7 +126,8 @@ export const api = {
   },
 
   projects: {
-    list: () => request<ProjectSummary[]>('/projects/'),
+    list: () => request<{ count: number; results: ProjectSummary[] } | ProjectSummary[]>('/projects/')
+      .then(data => Array.isArray(data) ? data : (data as { results: ProjectSummary[] }).results || []),
     get: (id: number) => request<ProjectDetail>(`/projects/${id}/`),
     create: (data: FormData) => request<ProjectDetail>('/projects/', { method: 'POST', body: data }, true),
     createJson: (data: Record<string, unknown>) =>

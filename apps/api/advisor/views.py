@@ -110,8 +110,13 @@ def _call_hf(url: str, prompt: str, token: str, max_new_tokens: int = 512) -> st
                     data = json.loads(resp2.read().decode())
             except urllib.error.HTTPError as exc2:
                 raise RuntimeError(f"Model still loading after retry ({exc2.code}). Try again in 30 seconds.") from exc2
+            except urllib.error.URLError as exc2:
+                raise RuntimeError(f"Network error reaching HuggingFace: {exc2}") from exc2
         else:
             raise RuntimeError(f"HuggingFace API error {exc.code}. Please try again.") from exc
+    except urllib.error.URLError as exc:
+        logger.warning("HF network error: %s", exc)
+        raise RuntimeError(f"Network error reaching HuggingFace: {exc}") from exc
 
     if isinstance(data, list) and data:
         return (data[0].get("generated_text") or "").strip()

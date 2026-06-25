@@ -19,7 +19,7 @@ class BudgetSerializer(serializers.ModelSerializer):
             'extraction_status', 'confidence_score', 'extracted_at',
             'reviewed_at', 'line_items', 'line_item_count', 'created_at',
         ]
-        read_only_fields = ['extraction_status', 'confidence_score', 'extracted_at']
+        read_only_fields = ['id', 'project', 'extraction_status', 'confidence_score', 'extracted_at', 'created_at']
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
