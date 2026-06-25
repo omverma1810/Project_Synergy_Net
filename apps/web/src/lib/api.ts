@@ -4,6 +4,11 @@
 // only if you want the browser to call the backend directly.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
+// DRF uses pagination by default — unwrap the envelope when present.
+function unwrapList<T>(data: { count: number; results: T[] } | T[]): T[] {
+  return Array.isArray(data) ? data : (data as { results: T[] }).results ?? [];
+}
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('auth_token');
@@ -126,8 +131,7 @@ export const api = {
   },
 
   projects: {
-    list: () => request<{ count: number; results: ProjectSummary[] } | ProjectSummary[]>('/projects/')
-      .then(data => Array.isArray(data) ? data : (data as { results: ProjectSummary[] }).results || []),
+    list: () => request<{ count: number; results: ProjectSummary[] } | ProjectSummary[]>('/projects/').then(unwrapList),
     get: (id: number) => request<ProjectDetail>(`/projects/${id}/`),
     create: (data: FormData) => request<ProjectDetail>('/projects/', { method: 'POST', body: data }, true),
     createJson: (data: Record<string, unknown>) =>
@@ -150,13 +154,13 @@ export const api = {
   territories: {
     list: (params?: Record<string, string>) => {
       const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-      return request<Territory[]>(`/territories/${qs}`);
+      return request<{ count: number; results: Territory[] } | Territory[]>(`/territories/${qs}`).then(unwrapList);
     },
     get: (id: number) => request<TerritoryDetail>(`/territories/${id}/`),
-    partners: (id: number) => request<TerritoryPartner[]>(`/territories/${id}/partners/`),
+    partners: (id: number) => request<{ count: number; results: TerritoryPartner[] } | TerritoryPartner[]>(`/territories/${id}/partners/`).then(unwrapList),
     alerts: (params?: Record<string, string>) => {
       const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-      return request<PolicyAlert[]>(`/territories/alerts/${qs}`);
+      return request<{ count: number; results: PolicyAlert[] } | PolicyAlert[]>(`/territories/alerts/${qs}`).then(unwrapList);
     },
   },
 
@@ -166,12 +170,12 @@ export const api = {
     get: (id: number) => request<Analysis>(`/analysis/${id}/`),
     list: (projectId?: number) => {
       const qs = projectId ? `?project=${projectId}` : '';
-      return request<Analysis[]>(`/analysis/${qs}`);
+      return request<{ count: number; results: Analysis[] } | Analysis[]>(`/analysis/${qs}`).then(unwrapList);
     },
   },
 
   reports: {
-    list: () => request<Report[]>('/reports/'),
+    list: () => request<{ count: number; results: Report[] } | Report[]>('/reports/').then(unwrapList),
     generate: (analysisId: number, format: 'PDF' | 'XLSX') =>
       request<Report>('/reports/generate/', {
         method: 'POST',

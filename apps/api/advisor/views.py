@@ -1,8 +1,8 @@
 import json
 import logging
 import time
-import urllib.request
-import urllib.error
+
+import requests as _requests
 
 from django.conf import settings
 from rest_framework.views import APIView
@@ -16,10 +16,10 @@ from analysis.insights import build_finance_snapshot
 
 logger = logging.getLogger(__name__)
 
-# Zephyr-7B-beta is freely accessible on HF Inference API with no gating.
-# Mistral v0.2 is the fallback (requires HF login but no gated approval).
-HF_API_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
-HF_FALLBACK_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+# HuggingFace switched from api-inference.huggingface.co to router.huggingface.co
+# for the Serverless Inference API in late 2024.
+HF_API_URL = "https://router.huggingface.co/hf-inference/models/HuggingFaceH4/zephyr-7b-beta"
+HF_FALLBACK_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
 
 
 def _build_territory_context() -> str:
@@ -71,53 +71,43 @@ def _build_analysis_context(user) -> str:
 
 
 def _call_hf(url: str, prompt: str, token: str, max_new_tokens: int = 512) -> str:
-    payload = json.dumps({
+    payload = {
         "inputs": prompt,
         "parameters": {
             "max_new_tokens": max_new_tokens,
             "temperature": 0.4,
             "return_full_text": False,
         },
-    }).encode()
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
 
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode()
-        logger.warning("HF API error %s: %s", exc.code, body)
-
-        # 503 = model is loading; wait and retry once
-        if exc.code == 503:
-            try:
-                body_json = json.loads(body)
-                wait = min(float(body_json.get("estimated_time", 20)), 30)
-            except Exception:
-                wait = 20
-            logger.info("HF model loading, waiting %.0fs then retrying", wait)
-            time.sleep(wait)
-            try:
-                with urllib.request.urlopen(req, timeout=60) as resp2:
-                    data = json.loads(resp2.read().decode())
-            except urllib.error.HTTPError as exc2:
-                raise RuntimeError(f"Model still loading after retry ({exc2.code}). Try again in 30 seconds.") from exc2
-            except urllib.error.URLError as exc2:
-                raise RuntimeError(f"Network error reaching HuggingFace: {exc2}") from exc2
-        else:
-            raise RuntimeError(f"HuggingFace API error {exc.code}. Please try again.") from exc
-    except urllib.error.URLError as exc:
+        resp = _requests.post(url, json=payload, headers=headers, timeout=60)
+    except _requests.exceptions.RequestException as exc:
         logger.warning("HF network error: %s", exc)
         raise RuntimeError(f"Network error reaching HuggingFace: {exc}") from exc
 
+    if resp.status_code == 503:
+        # Model is loading — wait and retry once
+        try:
+            wait = min(float(resp.json().get("estimated_time", 20)), 30)
+        except Exception:
+            wait = 20
+        logger.info("HF model loading, waiting %.0fs then retrying", wait)
+        time.sleep(wait)
+        try:
+            resp = _requests.post(url, json=payload, headers=headers, timeout=60)
+        except _requests.exceptions.RequestException as exc2:
+            raise RuntimeError(f"Network error on HuggingFace retry: {exc2}") from exc2
+
+    if not resp.ok:
+        logger.warning("HF API error %s: %s", resp.status_code, resp.text[:200])
+        raise RuntimeError(f"HuggingFace API error {resp.status_code}. Please try again.")
+
+    data = resp.json()
     if isinstance(data, list) and data:
         return (data[0].get("generated_text") or "").strip()
     if isinstance(data, dict):

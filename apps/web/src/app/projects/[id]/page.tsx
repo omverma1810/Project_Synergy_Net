@@ -46,7 +46,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       api.analysis.list(pid).catch(() => [] as Analysis[]),
     ]).then(([p, a]) => {
       setProject(p);
-      setAnalyses(Array.isArray(a) ? a : []);
+      setAnalyses(a);
     }).finally(() => setLoading(false));
   }, [id]);
 

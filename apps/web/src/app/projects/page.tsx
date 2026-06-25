@@ -34,7 +34,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     api.projects.list()
-      .then(data => setProjects(Array.isArray(data) ? data : []))
+      .then(setProjects)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
