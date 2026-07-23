@@ -7,9 +7,9 @@
  */
 export function SynergyMark({
   size = 28,
-  animate: _animate = true,
 }: {
   size?: number;
+  /** Accepted for API compatibility; the raster logo has no animation. */
   animate?: boolean;
 }) {
   return (

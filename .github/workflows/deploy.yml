@@ -28,6 +28,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Preflight — verify GCP credentials are configured
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "${GCP_SA_KEY}" ]; then
+            echo "::error::GCP_SA_KEY secret is empty or missing. The backend cannot deploy."
+            echo "::error::Fix: repo Settings → Secrets and variables → Actions → add/update GCP_SA_KEY with the JSON service-account key."
+            exit 1
+          fi
+          echo "GCP_SA_KEY present (${#GCP_SA_KEY} chars)."
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -130,7 +141,12 @@ jobs:
   deploy-frontend:
     name: Frontend → Vercel
     runs-on: ubuntu-latest
+    # Run AFTER the backend for ordering, but never SKIP when the backend fails —
+    # the frontend is an independent deploy target and a backend/secret problem
+    # must not block shipping the web app. always() overrides the default
+    # "skip if a needed job failed" behaviour.
     needs: deploy-backend
+    if: ${{ always() }}
 
     steps:
       - name: Checkout
