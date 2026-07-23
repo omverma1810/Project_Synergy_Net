@@ -172,6 +172,14 @@ export const api = {
       const qs = projectId ? `?project=${projectId}` : '';
       return request<{ count: number; results: Analysis[] } | Analysis[]>(`/analysis/${qs}`).then(unwrapList);
     },
+    financialModel: (projectId: number, params?: { budget?: number; fx_rate?: number }) => {
+      const qs = params
+        ? '?' + new URLSearchParams(
+            Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
+          ).toString()
+        : '';
+      return request<FinancialModel>(`/analysis/financial-model/${projectId}/${qs}`);
+    },
   },
 
   reports: {
@@ -333,6 +341,51 @@ export interface PolicyAlert {
   effective_date: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface FinancialModel {
+  currency: string;
+  project: { id: number; title: string; budget_id: number };
+  incentive: {
+    gross_budget: number;
+    eligible_spend: number;
+    eligible_spend_law_ccy: number;
+    rebate: number;
+    rebate_law_ccy: number;
+    net_cash_exposure: number;
+    blended_rate: number;
+    eligible_of_gross: number;
+    fx_rate: number;
+    first_tier_rebate_law_ccy: number;
+    excess_rebate_law_ccy: number;
+    compliance: Record<string, { threshold: number; value: number; status: string } | string>;
+    capped_by_legal_cap: boolean;
+    capped_by_cost_cap: boolean;
+  };
+  capital_stack: {
+    gross_budget: number;
+    tax_shield: number;
+    net_cash_exposure: number;
+    buffer_pct: number;
+    investor_pct: number;
+  };
+  revenue_scenarios: Record<'floor' | 'base' | 'breakout', {
+    scenario: string;
+    worldwide_gross: number;
+    distribution_haircut: number;
+    net_project_revenue: number;
+    net_cash_exposure: number;
+    coverage_multiple: number;
+    cash_on_cash: number;
+    covers_exposure: boolean;
+  }>;
+  sensitivity: Array<{
+    scenario: string;
+    gross_budget: number;
+    rebate: number;
+    net_cash_exposure: number;
+    blended_rate: number;
+  }>;
 }
 
 export interface FinanceSnapshot {

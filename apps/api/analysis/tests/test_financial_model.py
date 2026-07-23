@@ -21,6 +21,7 @@ from analysis.financial_model import (
     classify_line,
     compute_eligible_spend,
     compute_incentive,
+    default_revenue_windows,
     project_revenue,
 )
 
@@ -146,6 +147,23 @@ class SensitivityTests(unittest.TestCase):
         self.assertEqual(rows[-1]["rebate"], 0.0)
         # Overruns raise exposure.
         self.assertGreater(rows[1]["net_cash_exposure"], base["net_cash_exposure"])
+
+
+class DefaultWindowsTests(unittest.TestCase):
+    def test_scales_linearly_with_budget(self):
+        w1 = default_revenue_windows(Decimal("4145000"))
+        w2 = default_revenue_windows(Decimal("8290000"))  # 2x budget
+        base1 = sum((w.base for w in w1), Decimal("0"))
+        base2 = sum((w.base for w in w2), Decimal("0"))
+        # Doubling the budget doubles the benchmark revenue.
+        self.assertEqual(base2, base1 * 2)
+
+    def test_three_tiers_present_and_ordered(self):
+        windows = default_revenue_windows(Decimal("4145000"))
+        self.assertTrue(windows)
+        for w in windows:
+            self.assertLessEqual(w.floor, w.base)
+            self.assertLessEqual(w.base, w.breakout)
 
 
 class FullModelTests(unittest.TestCase):

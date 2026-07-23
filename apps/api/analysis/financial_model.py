@@ -286,6 +286,49 @@ class RevenueWindow:
         return _d(getattr(self, scenario))
 
 
+# Reference window benchmarks for a ~$4.145M genre feature (from the workbook's
+# Performance Estimator). Used to synthesise Floor/Base/Breakout revenue when a
+# project has no bespoke sales estimates yet — scaled linearly by budget size.
+# (title, floor, base, breakout) in USD.
+_REFERENCE_WINDOWS: tuple[tuple[str, str, str, str], ...] = (
+    ("US Theatrical (net to producer)", "35000", "300000", "3825000"),
+    ("VOD — Netflix / Lead SVOD", "100000", "300000", "2500000"),
+    ("VOD — Amazon / TVOD", "60000", "175000", "350000"),
+    ("VOD — Apple / Premium Digital", "40000", "125000", "250000"),
+    ("VOD — Hulu / Bundle", "25000", "75000", "150000"),
+    ("VOD — Canal+ / EU Local", "25000", "75000", "150000"),
+    ("UK / Ireland MG", "100000", "250000", "700000"),
+    ("Germany MG", "100000", "250000", "700000"),
+    ("France MG", "125000", "300000", "800000"),
+    ("Italy MG", "75000", "200000", "600000"),
+    ("Spain MG", "100000", "250000", "700000"),
+    ("Airline / In-flight", "30000", "60000", "85000"),
+    ("Global TV / PPV", "50000", "100000", "150000"),
+)
+_REFERENCE_BUDGET = Decimal("4145000")
+
+
+def default_revenue_windows(gross_budget: Decimal) -> list["RevenueWindow"]:
+    """Synthesise Floor/Base/Breakout windows for a project by scaling the reference
+    $4.145M genre-feature benchmarks linearly by budget.
+
+    This is a conservative, internally-consistent first estimate (net-to-producer
+    theatrical across all scenarios) meant to be replaced by real sales-agent
+    quotes. It is intentionally NOT an exact clone of the source workbook, which
+    mixes net theatrical in Floor/Base with gross theatrical in the Breakout
+    headline."""
+    scale = _d(gross_budget) / _REFERENCE_BUDGET if gross_budget else ZERO
+    windows: list[RevenueWindow] = []
+    for name, floor, base, breakout in _REFERENCE_WINDOWS:
+        windows.append(RevenueWindow(
+            name=name,
+            floor=money(_d(floor) * scale),
+            base=money(_d(base) * scale),
+            breakout=money(_d(breakout) * scale),
+        ))
+    return windows
+
+
 @dataclass
 class ScenarioResult:
     scenario: str
@@ -515,6 +558,8 @@ def build_from_budget(budget, *, windows=None, fx_rate=Decimal("1.1724"), progra
     project = budget.project
     shoot_days = getattr(project, "shoot_duration_days", None) or 25
     currency = getattr(project, "currency", "USD") or "USD"
+    if windows is None:
+        windows = default_revenue_windows(gross)
     return build_financial_model(
         gross_budget=gross,
         eligible_lines=lines,

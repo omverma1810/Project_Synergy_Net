@@ -2,9 +2,11 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from decimal import Decimal, InvalidOperation
 from .models import Analysis, AnalysisResult
 from .serializers import AnalysisSerializer, AnalysisResultSerializer
 from .tasks import run_analysis, ensure_budget_has_line_items
+from .financial_model import build_from_budget
 from projects.models import Project, Budget
 
 
@@ -85,6 +87,63 @@ class AnalysisResultListView(generics.ListAPIView):
             Analysis, pk=self.kwargs['analysis_id'], project__producer=self.request.user
         )
         return analysis.results.all()
+
+
+class FinancialModelView(APIView):
+    """GET /analysis/financial-model/<project_id>/
+
+    Returns the Net-Cash-Exposure financial model (Archetype C) for the project's
+    most recent budget: incentive/rebate, net cash exposure, capital-stack
+    waterline, Floor/Base/Breakout revenue scenarios, and budget sensitivity.
+
+    Optional query params:
+      ?budget=<id>       use a specific budget instead of the latest
+      ?fx_rate=<float>   presentation-currency units per 1 EUR (default 1.1724)
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(Project, pk=project_id, producer=request.user)
+
+        budget_id = request.query_params.get('budget')
+        if budget_id:
+            budget = get_object_or_404(Budget, pk=budget_id, project=project)
+        else:
+            budget = project.budgets.order_by('-created_at').first()
+
+        if not budget:
+            return Response(
+                {'detail': 'No budget found. Upload a budget or add spend estimates first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ensure_budget_has_line_items(budget)
+        if not budget.line_items.exists():
+            return Response(
+                {'detail': 'Budget has no line items and no spend estimates to model.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        fx_rate = Decimal('1.1724')
+        raw_fx = request.query_params.get('fx_rate')
+        if raw_fx:
+            try:
+                fx_rate = Decimal(str(raw_fx))
+                if fx_rate <= 0:
+                    raise InvalidOperation
+            except (InvalidOperation, ValueError):
+                return Response(
+                    {'detail': 'fx_rate must be a positive number.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        model = build_from_budget(budget, fx_rate=fx_rate)
+        model['project'] = {
+            'id': project.id,
+            'title': project.title,
+            'budget_id': budget.id,
+        }
+        return Response(model)
 
 
 class TriggerAnalysisView(APIView):
