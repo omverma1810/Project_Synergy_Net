@@ -212,6 +212,22 @@ export const api = {
       }
       return res.blob();
     },
+    pitchDeckPdf: async (projectId: number, params?: { budget?: number; territory?: number; fx_rate?: number }) => {
+      const qs = params
+        ? '?' + new URLSearchParams(
+            Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
+          ).toString()
+        : '';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const res = await fetch(`${API_BASE}/analysis/pitch-deck/${projectId}/pdf/${qs}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw Object.assign(new Error(err.detail || 'Pitch deck generation failed'), { status: res.status });
+      }
+      return res.blob();
+    },
   },
 
   reports: {

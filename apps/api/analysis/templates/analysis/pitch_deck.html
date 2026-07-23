@@ -1,0 +1,168 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ project.title }} — Pitch Deck | Synergy Media Labs</title>
+    <style>
+        @page { size: A4 landscape; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Helvetica, Arial, sans-serif; }
+
+        .slide {
+            width: 29.7cm; height: 21cm; padding: 2.2cm 2.6cm;
+            page-break-after: always; position: relative; overflow: hidden;
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .dark { background: #0a0e1a; color: #f1f5f9; }
+        .darker { background: #060911; color: #f1f5f9; }
+        .light { background: #f6f7f4; color: #0f172a; }
+        .accent-bar { position: absolute; top: 0; left: 0; height: 100%; width: 10px;
+                      background: linear-gradient(180deg, #22d3ee, #3b82f6, #a78bfa); }
+        .cyan { color: #22d3ee; }
+        .grad { background: linear-gradient(90deg, #22d3ee, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+        .kicker { font-size: 13px; text-transform: uppercase; letter-spacing: 5px; color: #64748b; margin-bottom: 18px; }
+        .title { font-size: 78px; font-weight: bold; line-height: 1.02; letter-spacing: -1px; }
+        .tagline { font-size: 22px; color: #94a3b8; margin-top: 18px; font-style: italic; }
+        .brandline { position: absolute; bottom: 1.6cm; left: 2.6cm; display: flex; align-items: center; gap: 12px; }
+        .brandline .name { font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+        .brandline .sub { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; }
+        .pagenum { position: absolute; bottom: 1.6cm; right: 2.6cm; font-size: 11px; color: #475569; }
+
+        h2.slide-h { font-size: 44px; font-weight: bold; margin-bottom: 8px; }
+        .specs { display: flex; gap: 40px; margin-top: 30px; }
+        .spec .k { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748b; }
+        .spec .v { font-size: 26px; font-weight: bold; margin-top: 6px; }
+        .synopsis { font-size: 21px; line-height: 1.7; max-width: 21cm; color: #cbd5e1; }
+        .light .synopsis { color: #334155; }
+
+        .cast-grid { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 34px; }
+        .cast-card { width: 5.7cm; }
+        .cast-card .avatar { height: 3.4cm; border-radius: 12px; background: linear-gradient(135deg, #1e293b, #0f172a);
+            border: 1px solid rgba(34,211,238,0.25); display: flex; align-items: center; justify-content: center;
+            font-size: 34px; font-weight: bold; color: #22d3ee; }
+        .cast-card .role { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-top: 10px; }
+        .cast-card .name { font-size: 17px; font-weight: bold; margin-top: 2px; }
+        .cast-card .status { font-size: 10px; color: #34d399; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .comp-row { display: flex; gap: 24px; margin-top: 40px; }
+        .comp { flex: 1; border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 30px 24px; text-align: center; }
+        .comp .n { font-size: 24px; font-weight: bold; }
+        .comp .t { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; margin-top: 10px; }
+
+        .ask { display: flex; gap: 26px; margin-top: 40px; }
+        .ask .box { flex: 1; border-radius: 16px; padding: 30px; }
+        .ask .b1 { background: rgba(255,255,255,0.04); border: 1px solid rgba(148,163,184,0.2); }
+        .ask .b2 { background: rgba(16,185,129,0.10); border: 1px solid rgba(52,211,153,0.3); }
+        .ask .b3 { background: rgba(34,211,238,0.10); border: 1px solid rgba(34,211,238,0.3); }
+        .ask .k { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #94a3b8; }
+        .ask .v { font-size: 34px; font-weight: bold; margin-top: 10px; }
+        .ask .b2 .v { color: #34d399; } .ask .b3 .v { color: #22d3ee; }
+    </style>
+</head>
+<body>
+
+<!-- Slide 1 — Title -->
+<div class="slide darker">
+    <div class="accent-bar"></div>
+    <div class="kicker">A {% if project.genre %}{{ project.genre|title }} {% endif %}{% if project.get_type_display %}{{ project.get_type_display }}{% else %}Feature{% endif %}</div>
+    <div class="title grad">{{ project.title }}</div>
+    {% if project.synopsis %}<div class="tagline">{{ project.synopsis|truncatewords:16 }}</div>{% endif %}
+    <div class="brandline">
+        {% if logo_data %}<img src="data:image/jpeg;base64,{{ logo_data }}" style="height:40px;border-radius:8px;">{% endif %}
+        <div><div class="name">SYNERGY MEDIA LABS</div><div class="sub">A Synergy Media Corporation Company</div></div>
+    </div>
+    <div class="pagenum">Pitch Deck</div>
+</div>
+
+<!-- Slide 2 — Logline & specs -->
+<div class="slide dark">
+    <div class="accent-bar"></div>
+    <div class="kicker">Logline</div>
+    <div class="synopsis">{% if project.synopsis %}{{ project.synopsis|truncatewords:34 }}{% else %}A compelling story, ready for the screen.{% endif %}</div>
+    <div class="specs">
+        <div class="spec"><div class="k">Format</div><div class="v">{% if project.get_type_display %}{{ project.get_type_display }}{% else %}Feature{% endif %}</div></div>
+        {% if project.genre %}<div class="spec"><div class="k">Genre</div><div class="v">{{ project.genre|title }}</div></div>{% endif %}
+        {% if project.language %}<div class="spec"><div class="k">Language</div><div class="v">{{ project.language }}</div></div>{% endif %}
+        {% if program.territory %}<div class="spec"><div class="k">Shoot</div><div class="v">{{ program.territory }}</div></div>{% endif %}
+    </div>
+    <div class="pagenum">02</div>
+</div>
+
+<!-- Slide 3 — Synopsis -->
+<div class="slide light">
+    <div class="accent-bar"></div>
+    <h2 class="slide-h">Synopsis</h2>
+    <div class="synopsis" style="margin-top:20px;">{% if project.synopsis %}{{ project.synopsis }}{% else %}Full synopsis to be provided during intake.{% endif %}</div>
+    <div class="pagenum">03</div>
+</div>
+
+<!-- Slide 4 — Cast -->
+<div class="slide dark">
+    <div class="accent-bar"></div>
+    <h2 class="slide-h">Cast</h2>
+    {% if cast %}
+    <div class="cast-grid">
+        {% for c in cast %}
+        <div class="cast-card">
+            <div class="avatar">{{ c.name|first|upper|default:"?" }}</div>
+            <div class="role">{{ c.role|default:"Role TBD" }}</div>
+            <div class="name">{{ c.name|default:"TBD" }}</div>
+            {% if c.status %}<div class="status">{{ c.status }}</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="synopsis" style="margin-top:20px;">Cast to be attached. Add cast details during intake to populate this slide with roles and attachment status.</div>
+    {% endif %}
+    <div class="pagenum">04</div>
+</div>
+
+<!-- Slide 5 — Tone comparables -->
+<div class="slide darker">
+    <div class="accent-bar"></div>
+    <h2 class="slide-h">Film Tone Comparables</h2>
+    <p style="color:#64748b;margin-top:6px;font-size:14px;">Tonal reference points for audience, look, and market positioning.</p>
+    <div class="comp-row">
+        {% for c in comparables %}
+        <div class="comp"><div class="n grad">{{ c }}</div><div class="t">Tonal Reference</div></div>
+        {% endfor %}
+    </div>
+    <div class="pagenum">05</div>
+</div>
+
+<!-- Slide 6 — The Ask (finance snapshot) -->
+<div class="slide dark">
+    <div class="accent-bar"></div>
+    <h2 class="slide-h">The Opportunity</h2>
+    <p style="color:#94a3b8;margin-top:6px;font-size:15px;">
+        The {{ program.territory }} incentive protects ~{{ capital_stack.buffer_pct|floatformat:0 }}% of the budget as a
+        first-loss buffer — investor capital sits above a government-backed floor.</p>
+    <div class="ask">
+        <div class="box b1"><div class="k">Gross Budget</div><div class="v">{{ currency }} {{ capital_stack.gross_budget|floatformat:0|intcomma }}</div></div>
+        <div class="box b2"><div class="k">Tax Shield</div><div class="v">{{ currency }} {{ capital_stack.tax_shield|floatformat:0|intcomma }}</div></div>
+        <div class="box b3"><div class="k">Net Cash Exposure</div><div class="v">{{ currency }} {{ capital_stack.net_cash_exposure|floatformat:0|intcomma }}</div></div>
+    </div>
+    <p style="color:#475569;margin-top:26px;font-size:11px;">Full financials in the accompanying Business Plan &amp; Financial Model.</p>
+    <div class="pagenum">06</div>
+</div>
+
+<!-- Slide 7 — Contact -->
+<div class="slide darker">
+    <div class="accent-bar"></div>
+    <div class="kicker">Let's make it</div>
+    <div class="title grad" style="font-size:60px;">{{ project.title }}</div>
+    <div style="margin-top:30px;font-size:18px;color:#cbd5e1;">
+        {% if company %}{{ company }}<br>{% endif %}
+        {% if producer %}{{ producer.get_full_name|default:producer.email }}{% if producer.email %} · {{ producer.email }}{% endif %}{% endif %}
+    </div>
+    <div class="brandline">
+        {% if logo_data %}<img src="data:image/jpeg;base64,{{ logo_data }}" style="height:36px;border-radius:8px;">{% endif %}
+        <div><div class="name">SYNERGY MEDIA LABS</div><div class="sub">Confidential · © {{ year }} Synergy Media Corporation</div></div>
+    </div>
+    <div class="pagenum">07</div>
+</div>
+
+</body>
+</html>

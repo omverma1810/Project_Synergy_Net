@@ -10,6 +10,7 @@ from .tasks import run_analysis, ensure_budget_has_line_items
 from .financial_model import build_from_budget
 from .financial_pdf import FinancialModelPDF
 from .business_plan_pdf import BusinessPlanPDF
+from .pitch_deck_pdf import PitchDeckPDF
 from projects.models import Project, Budget
 
 
@@ -222,6 +223,29 @@ class BusinessPlanPDFView(APIView):
         response = HttpResponse(content, content_type='application/pdf')
         response['Content-Disposition'] = (
             f'attachment; filename="synergy_business_plan_{project.id}.pdf"'
+        )
+        response['Content-Length'] = len(content)
+        return response
+
+
+class PitchDeckPDFView(APIView):
+    """GET /analysis/pitch-deck/<project_id>/pdf/ — the visual investor Pitch Deck
+    (Archetype B): title, logline, synopsis, cast, tone comparables, the finance
+    opportunity, and contact. Same query params as the other model endpoints."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(Project, pk=project_id, producer=request.user)
+        model, _budget, error = _build_project_financial_model(request, project)
+        if error is not None:
+            return error
+        try:
+            content = PitchDeckPDF(model, project).generate()
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response = HttpResponse(content, content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="synergy_pitch_deck_{project.id}.pdf"'
         )
         response['Content-Length'] = len(content)
         return response

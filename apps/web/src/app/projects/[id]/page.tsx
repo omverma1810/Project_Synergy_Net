@@ -43,6 +43,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [finError, setFinError] = useState('');
   const [finPdf, setFinPdf] = useState(false);
   const [bizPdf, setBizPdf] = useState(false);
+  const [deckPdf, setDeckPdf] = useState(false);
   const [editRev, setEditRev] = useState(false);
   const [revRows, setRevRows] = useState<{ name: string; floor: string; base: string; breakout: string }[]>([]);
   const [savingRev, setSavingRev] = useState(false);
@@ -147,25 +148,35 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const handleBusinessPlan = async () => {
-    setBizPdf(true);
+  const downloadPdf = async (
+    fetcher: () => Promise<Blob>,
+    filename: string,
+    setBusy: (b: boolean) => void,
+    okMsg: string,
+  ) => {
+    setBusy(true);
     try {
-      const blob = await api.analysis.businessPlanPdf(parseInt(id));
+      const blob = await fetcher();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `synergy_business_plan_${id}.pdf`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Business plan PDF ready');
+      toast.success(okMsg);
     } catch (e: unknown) {
-      toast.error((e as Error).message || 'Business plan generation failed');
+      toast.error((e as Error).message || 'PDF generation failed');
     } finally {
-      setBizPdf(false);
+      setBusy(false);
     }
   };
+
+  const handleBusinessPlan = () =>
+    downloadPdf(() => api.analysis.businessPlanPdf(parseInt(id)), `synergy_business_plan_${id}.pdf`, setBizPdf, 'Business plan PDF ready');
+  const handlePitchDeck = () =>
+    downloadPdf(() => api.analysis.pitchDeckPdf(parseInt(id)), `synergy_pitch_deck_${id}.pdf`, setDeckPdf, 'Pitch deck PDF ready');
 
   const handleReport = async (format: 'PDF' | 'XLSX', analysisId: number) => {
     setGeneratingReport(format);
@@ -480,6 +491,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                           ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
                           : <DocumentArrowDownIcon className="h-4 w-4" />}
                         Full Business Plan PDF
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={handlePitchDeck} disabled={deckPdf}
+                        className="btn-secondary flex items-center gap-2"
+                      >
+                        {deckPdf
+                          ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                          : <DocumentArrowDownIcon className="h-4 w-4" />}
+                        Pitch Deck PDF
                       </motion.button>
                     </div>
                   </div>
