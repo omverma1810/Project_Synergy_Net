@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckIcon, ChevronRightIcon, ChevronLeftIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, Territory } from '@/lib/api';
 import Layout from '@/components/Layout';
 
 const step1Schema = z.object({
@@ -18,6 +18,7 @@ const step1Schema = z.object({
   synopsis: z.string().optional(),
   total_budget: z.string().min(1, 'Budget required'),
   currency: z.string().length(3),
+  target_territory: z.string().optional(),
   shoot_start_date: z.string().optional(),
   shoot_end_date: z.string().optional(),
   shoot_duration_days: z.string().optional(),
@@ -51,6 +52,11 @@ export default function NewProjectPage() {
   const [budgetFile, setBudgetFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [territories, setTerritories] = useState<Territory[]>([]);
+
+  useEffect(() => {
+    api.territories.list().then(setTerritories).catch(() => {});
+  }, []);
 
   const { register, handleSubmit, formState: { errors } } = useForm<Step1Data>({
     resolver: zodResolver(step1Schema),
@@ -85,6 +91,7 @@ export default function NewProjectPage() {
         shoot_start_date: step1Data.shoot_start_date || null,
         shoot_end_date: step1Data.shoot_end_date || null,
         shoot_duration_days: step1Data.shoot_duration_days ? parseInt(step1Data.shoot_duration_days) : null,
+        target_territory: step1Data.target_territory ? parseInt(step1Data.target_territory) : null,
         spend_estimates,
       });
 
@@ -199,6 +206,18 @@ export default function NewProjectPage() {
                   <label className="form-label">Total Budget *</label>
                   <input {...register('total_budget')} type="number" placeholder="2500000" className="form-input" />
                   {errors.total_budget && <p className="mt-1 text-xs text-synergy-red">{errors.total_budget.message}</p>}
+                </div>
+                <div>
+                  <label className="form-label">Shoot Location (incentive territory)</label>
+                  <select {...register('target_territory')} className="form-select">
+                    <option value="">Decide later / run analysis to compare</option>
+                    {territories.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} — {parseFloat(t.base_percentage).toFixed(0)}%{t.is_stackable && parseFloat(t.provincial_percentage) > 0 ? ` (+${parseFloat(t.provincial_percentage).toFixed(0)}%)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-synergy-muted">Sets the default rebate program for your financial model. You can compare all territories later.</p>
                 </div>
                 <div>
                   <label className="form-label">Synopsis</label>
@@ -322,6 +341,7 @@ export default function NewProjectPage() {
                       ['Title', step1Data.title],
                       ['Type · Genre', `${step1Data.type.replace('_', ' ').toLowerCase()} · ${step1Data.genre}`],
                       ['Total budget', Number(step1Data.total_budget).toLocaleString('en-US', { style: 'currency', currency: step1Data.currency, maximumFractionDigits: 0 })],
+                      ['Shoot location', step1Data.target_territory ? (territories.find(t => String(t.id) === step1Data.target_territory)?.name || '—') : 'Decide later'],
                       ['Spend categories', `${estimates.filter(e => e.category && e.amount).length} · ${spendTotal.toLocaleString('en-US', { style: 'currency', currency: step1Data.currency, maximumFractionDigits: 0 })}`],
                     ].map(([k, v]) => (
                       <div key={k} className="flex justify-between text-xs">

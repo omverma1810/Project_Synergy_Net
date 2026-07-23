@@ -246,6 +246,8 @@ export interface ProjectDetail extends ProjectSummary {
   production_timeline: Record<string, string>;
   vetting_notes: string;
   vetting_reviewed_at: string | null;
+  target_territory: number | null;
+  target_territory_name?: string | null;
   budgets: Budget[];
 }
 

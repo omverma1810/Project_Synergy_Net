@@ -42,6 +42,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
     budgets = BudgetSerializer(many=True, read_only=True)
+    target_territory_name = serializers.CharField(source='target_territory.name', read_only=True)
 
     class Meta:
         model = Project

@@ -56,6 +56,13 @@ class Project(models.Model):
     )
     vetting_reviewed_at = models.DateTimeField(null=True, blank=True)
 
+    # Producer's intended shoot territory — drives the default incentive program
+    # for the financial model. Set during intake; overridable per analysis.
+    target_territory = models.ForeignKey(
+        'territories.Territory', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='target_projects',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -92,12 +92,17 @@ class AnalysisResultListView(generics.ListAPIView):
 
 
 def _resolve_territory(request, project):
-    """Explicit ?territory=, else the top-ranked territory from the project's most
-    recent completed analysis, else None (engine defaults to Canary Islands)."""
+    """Resolve the incentive territory, in priority order:
+    1. explicit ?territory=<id>
+    2. the project's chosen shoot territory (set during intake)
+    3. the top-ranked territory from the project's most recent completed analysis
+    4. None (engine defaults to Canary Islands)."""
     from territories.models import Territory
     territory_id = request.query_params.get('territory')
     if territory_id:
         return get_object_or_404(Territory, pk=territory_id)
+    if project.target_territory_id:
+        return project.target_territory
     latest = (
         Analysis.objects.filter(project=project, status='COMPLETED')
         .order_by('-completed_at')
