@@ -550,11 +550,17 @@ def build_financial_model(
         gross_budget, eligible_spend, fx_rate=fx_rate, shoot_days=shoot_days, program=program
     )
 
+    window_list = list(windows) if windows is not None else None
     scenarios = (
         {k: v.as_dict() for k, v in project_revenue(
-            windows, incentive.net_cash_exposure, distribution_haircut_pct=distribution_haircut_pct
+            window_list, incentive.net_cash_exposure, distribution_haircut_pct=distribution_haircut_pct
         ).items()}
-        if windows is not None else {}
+        if window_list is not None else {}
+    )
+    revenue_windows = (
+        [{"name": w.name, "floor": float(w.floor), "base": float(w.base), "breakout": float(w.breakout)}
+         for w in window_list]
+        if window_list is not None else []
     )
 
     gross = incentive.gross_budget
@@ -573,6 +579,8 @@ def build_financial_model(
             "investor_pct": float(pct(Decimal("100") - buffer_pct)),
         },
         "revenue_scenarios": scenarios,
+        "revenue_windows": revenue_windows,
+        "distribution_haircut_pct": float(distribution_haircut_pct),
         "sensitivity": budget_sensitivity(
             gross_budget, eligible_spend, fx_rate=fx_rate, shoot_days=shoot_days, program=program
         ),

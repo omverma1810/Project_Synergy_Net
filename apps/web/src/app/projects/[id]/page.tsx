@@ -42,6 +42,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [finLoading, setFinLoading] = useState(false);
   const [finError, setFinError] = useState('');
   const [finPdf, setFinPdf] = useState(false);
+  const [bizPdf, setBizPdf] = useState(false);
 
   useEffect(() => {
     const pid = parseInt(id);
@@ -97,6 +98,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       toast.error((e as Error).message || 'PDF generation failed');
     } finally {
       setFinPdf(false);
+    }
+  };
+
+  const handleBusinessPlan = async () => {
+    setBizPdf(true);
+    try {
+      const blob = await api.analysis.businessPlanPdf(parseInt(id));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `synergy_business_plan_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Business plan PDF ready');
+    } catch (e: unknown) {
+      toast.error((e as Error).message || 'Business plan generation failed');
+    } finally {
+      setBizPdf(false);
     }
   };
 
@@ -393,16 +414,28 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       The {fmt(cs.tax_shield, cur)} incentive is a first-loss buffer protecting ~{cs.buffer_pct.toFixed(0)}% of the
                       gross budget. The true investor hurdle is <span className="text-synergy-text font-medium">{fmt(cs.net_cash_exposure, cur)}</span> — below the gross budget.
                     </p>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                      onClick={handleFinancialPdf} disabled={finPdf}
-                      className="btn-primary flex items-center gap-2 mt-4"
-                    >
-                      {finPdf
-                        ? <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
-                        : <DocumentArrowDownIcon className="h-4 w-4" />}
-                      Download Financial Model PDF
-                    </motion.button>
+                    <div className="flex flex-wrap gap-3 mt-4">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={handleFinancialPdf} disabled={finPdf}
+                        className="btn-primary flex items-center gap-2"
+                      >
+                        {finPdf
+                          ? <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
+                          : <DocumentArrowDownIcon className="h-4 w-4" />}
+                        Financial Model PDF
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={handleBusinessPlan} disabled={bizPdf}
+                        className="btn-secondary flex items-center gap-2"
+                      >
+                        {bizPdf
+                          ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                          : <DocumentArrowDownIcon className="h-4 w-4" />}
+                        Full Business Plan PDF
+                      </motion.button>
+                    </div>
                   </div>
 
                   {/* Incentive calculation */}

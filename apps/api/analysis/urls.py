@@ -6,6 +6,7 @@ from .views import (
     TriggerAnalysisView,
     FinancialModelView,
     FinancialModelPDFView,
+    BusinessPlanPDFView,
 )
 
 urlpatterns = [
@@ -15,4 +16,5 @@ urlpatterns = [
     path('trigger/<int:project_id>/', TriggerAnalysisView.as_view(), name='trigger-analysis'),
     path('financial-model/<int:project_id>/', FinancialModelView.as_view(), name='financial-model'),
     path('financial-model/<int:project_id>/pdf/', FinancialModelPDFView.as_view(), name='financial-model-pdf'),
+    path('business-plan/<int:project_id>/pdf/', BusinessPlanPDFView.as_view(), name='business-plan-pdf'),
 ]

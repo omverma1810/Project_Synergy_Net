@@ -9,6 +9,7 @@ from .serializers import AnalysisSerializer, AnalysisResultSerializer
 from .tasks import run_analysis, ensure_budget_has_line_items
 from .financial_model import build_from_budget
 from .financial_pdf import FinancialModelPDF
+from .business_plan_pdf import BusinessPlanPDF
 from projects.models import Project, Budget
 
 
@@ -197,6 +198,30 @@ class FinancialModelPDFView(APIView):
         response = HttpResponse(content, content_type='application/pdf')
         response['Content-Disposition'] = (
             f'attachment; filename="synergy_financial_model_{project.id}.pdf"'
+        )
+        response['Content-Length'] = len(content)
+        return response
+
+
+class BusinessPlanPDFView(APIView):
+    """GET /analysis/business-plan/<project_id>/pdf/ — the full investor Business
+    Plan (Archetype A): Story, Budget, Financing, Cast, Schedule, Financial
+    Analysis, Distribution & Recoupment, Investment Returns, Team. Same query
+    params as the financial-model endpoints."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(Project, pk=project_id, producer=request.user)
+        model, budget, error = _build_project_financial_model(request, project)
+        if error is not None:
+            return error
+        try:
+            content = BusinessPlanPDF(model, project, budget).generate()
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response = HttpResponse(content, content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="synergy_business_plan_{project.id}.pdf"'
         )
         response['Content-Length'] = len(content)
         return response
