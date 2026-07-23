@@ -1,7 +1,7 @@
 'use client';
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
-import { SynergyWordmark } from './Brand';
+import { SynergyLogo } from './Brand';
 
 const highlights = [
   { value: '16+', label: 'Global territories modelled', tone: 'text-synergy-cyan' },
@@ -46,7 +46,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           transition={{ duration: 0.5 }}
           className="relative"
         >
-          <SynergyWordmark size="base" />
+          <SynergyLogo width={280} />
         </motion.div>
 
         <div className="relative">
@@ -122,7 +122,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           className="relative w-full max-w-md"
         >
           <div className="lg:hidden mb-8 flex justify-center">
-            <SynergyWordmark size="base" />
+            <SynergyLogo width={220} />
           </div>
           {children}
         </motion.div>

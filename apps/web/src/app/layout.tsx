@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 const SynergyAdvisor = dynamic(() => import("@/components/SynergyAdvisor"), { ssr: false });
 
 export const metadata: Metadata = {
-  title: "Synergy Net — Production Finance Intelligence",
+  title: "Synergy Net — Production Finance Intelligence | Synergy Media Labs",
   description:
     "Map any production budget to global film incentives in seconds. Rank the top territories by net economic yield across Europe, EMEA & Asia.",
   keywords: ["film finance", "tax incentives", "production rebates", "co-production", "film tax credit"],

@@ -38,7 +38,7 @@ export default function SynergyAdvisor() {
       const { answer } = await api.advisor.ask(question);
       setMessages((prev) => [...prev, { role: 'advisor', text: answer }]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Advisor unavailable. Please try again.';
+      const msg = err instanceof Error ? err.message : 'Akira is unavailable. Please try again.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -51,17 +51,15 @@ export default function SynergyAdvisor() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-synergy-cyan to-blue-600 shadow-lg shadow-synergy-cyan/30 transition-transform hover:scale-105 active:scale-95"
-        aria-label="Open Synergy Advisor"
+        aria-label="Open Akira"
       >
         {open ? (
           <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         ) : (
-          <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round"
-              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-          </svg>
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/logo-mark.jpg" alt="Akira" className="h-full w-full rounded-full object-cover" />
         )}
       </button>
 
@@ -79,15 +77,11 @@ export default function SynergyAdvisor() {
           >
             {/* Header */}
             <div className="flex items-center gap-3 border-b border-synergy-border/40 bg-white/[0.03] px-4 py-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-synergy-cyan to-blue-600">
-                <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                </svg>
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-mark.jpg" alt="Akira" className="h-8 w-8 rounded-full object-cover ring-1 ring-synergy-cyan/40" />
               <div>
-                <p className="text-sm font-semibold text-white">Synergy Advisor™</p>
-                <p className="text-[10px] text-synergy-text">AI-powered incentive intelligence</p>
+                <p className="text-sm font-semibold text-white">Akira</p>
+                <p className="text-[10px] text-synergy-text">Your AI production finance advisor · Synergy Media Labs</p>
               </div>
               <span className="ml-auto flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
             </div>
@@ -97,7 +91,7 @@ export default function SynergyAdvisor() {
               {messages.length === 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-synergy-text">
-                    Ask me anything about film incentives, territory comparisons, or your financing picture.
+                    Hi, I&apos;m Akira. Ask me anything about film incentives, territory comparisons, or your financing picture.
                   </p>
                   <div className="grid grid-cols-1 gap-1.5">
                     {SUGGESTIONS.map((s) => (
@@ -123,7 +117,7 @@ export default function SynergyAdvisor() {
                     }`}
                   >
                     {m.role === 'advisor' && (
-                      <p className="mb-1 text-[10px] font-semibold text-synergy-cyan">Synergy Advisor™</p>
+                      <p className="mb-1 text-[10px] font-semibold text-synergy-cyan">Akira</p>
                     )}
                     {m.text}
                   </div>
@@ -177,7 +171,7 @@ export default function SynergyAdvisor() {
                 </button>
               </form>
               <p className="mt-1.5 text-center text-[9px] text-synergy-text/40">
-                Powered by Mistral-7B via HuggingFace · Synergy Net™
+                Akira · Synergy Media Labs™
               </p>
             </div>
           </motion.div>

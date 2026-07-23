@@ -1,6 +1,4 @@
-import json
 import logging
-import time
 
 import requests as _requests
 
@@ -16,10 +14,19 @@ from analysis.insights import build_finance_snapshot
 
 logger = logging.getLogger(__name__)
 
-# HuggingFace switched from api-inference.huggingface.co to router.huggingface.co
-# for the Serverless Inference API in late 2024.
-HF_API_URL = "https://router.huggingface.co/hf-inference/models/HuggingFaceH4/zephyr-7b-beta"
-HF_FALLBACK_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
+# HuggingFace's OpenAI-compatible chat completions router. The legacy
+# api-inference.huggingface.co / hf-inference text-generation endpoints were
+# retired, and small chat models are now served through inference providers
+# behind this single endpoint.
+HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions"
+
+# Tried in order — routing picks whichever inference provider currently hosts
+# the model, so this survives individual providers dropping a model.
+CHAT_MODELS = [
+    "meta-llama/Llama-3.1-8B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "Qwen/Qwen2.5-7B-Instruct",
+]
 
 
 def _build_territory_context() -> str:
@@ -70,62 +77,44 @@ def _build_analysis_context(user) -> str:
     return "\n".join(parts)
 
 
-def _call_hf(url: str, prompt: str, token: str, max_new_tokens: int = 512) -> str:
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": max_new_tokens,
-            "temperature": 0.4,
-            "return_full_text": False,
-        },
-    }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-
-    try:
-        resp = _requests.post(url, json=payload, headers=headers, timeout=60)
-    except _requests.exceptions.RequestException as exc:
-        logger.warning("HF network error: %s", exc)
-        raise RuntimeError(f"Network error reaching HuggingFace: {exc}") from exc
-
-    if resp.status_code == 503:
-        # Model is loading — wait and retry once
-        try:
-            wait = min(float(resp.json().get("estimated_time", 20)), 30)
-        except Exception:
-            wait = 20
-        logger.info("HF model loading, waiting %.0fs then retrying", wait)
-        time.sleep(wait)
-        try:
-            resp = _requests.post(url, json=payload, headers=headers, timeout=60)
-        except _requests.exceptions.RequestException as exc2:
-            raise RuntimeError(f"Network error on HuggingFace retry: {exc2}") from exc2
-
-    if not resp.ok:
-        logger.warning("HF API error %s: %s", resp.status_code, resp.text[:200])
-        raise RuntimeError(f"HuggingFace API error {resp.status_code}. Please try again.")
-
-    data = resp.json()
-    if isinstance(data, list) and data:
-        return (data[0].get("generated_text") or "").strip()
-    if isinstance(data, dict):
-        return (data.get("generated_text") or "").strip()
-    return ""
-
-
-SYSTEM_PROMPT = """<|system|>
-You are Synergy Advisor, an expert AI assistant inside Synergy Net — a platform helping film and TV producers maximise international co-production incentives. You have deep knowledge of film tax incentives, rebate schemes, production finance, and co-production treaties.
+SYSTEM_PROMPT = """You are Akira, the expert AI production finance advisor inside Synergy Net, a Synergy Media Labs platform helping film and TV producers maximise international co-production incentives. You have deep knowledge of film tax incentives, rebate schemes, production finance, and co-production treaties.
 
 Available territory incentives (live data):
 {territory_context}
 {analysis_context}
 
-Instructions: Answer concisely and professionally. When asked where to film, give a ranked recommendation with specific reasons. Always cite rebate %, minimum spend thresholds, payout timing, and financing impact. End with a one-line action item for the producer.</s>
-<|user|>
-{question}</s>
-<|assistant|>"""
+Instructions: Answer concisely and professionally. Introduce yourself as Akira if greeted. When asked where to film, give a ranked recommendation with specific reasons. Always cite rebate %, minimum spend thresholds, payout timing, and financing impact. End with a one-line action item for the producer."""
+
+
+def _call_chat(model: str, system_prompt: str, question: str, token: str, max_tokens: int = 700) -> str:
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.4,
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = _requests.post(HF_CHAT_URL, json=payload, headers=headers, timeout=60)
+    except _requests.exceptions.RequestException as exc:
+        logger.warning("HF network error for %s: %s", model, exc)
+        raise RuntimeError(f"Network error reaching the AI service: {exc}") from exc
+
+    if not resp.ok:
+        logger.warning("HF chat error %s for %s: %s", resp.status_code, model, resp.text[:300])
+        raise RuntimeError(f"AI service error {resp.status_code} for {model}.")
+
+    data = resp.json()
+    choices = data.get("choices") or []
+    if not choices:
+        return ""
+    return (choices[0].get("message", {}).get("content") or "").strip()
 
 
 class AdvisorView(APIView):
@@ -139,33 +128,31 @@ class AdvisorView(APIView):
         hf_token = getattr(settings, "HF_API_TOKEN", "")
         if not hf_token:
             return Response(
-                {"detail": "Synergy Advisor is not yet configured. The HF_API_TOKEN secret needs to be set in GCP."},
+                {"detail": "Akira is not yet configured. The HF_API_TOKEN secret needs to be set in GCP."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         territory_ctx = _build_territory_context()
         analysis_ctx = _build_analysis_context(request.user)
-        prompt = SYSTEM_PROMPT.format(
+        system_prompt = SYSTEM_PROMPT.format(
             territory_context=territory_ctx,
             analysis_context=analysis_ctx,
-            question=question,
         )
 
-        # Try primary model (Zephyr-7B), fall back to Mistral v0.2 on failure
         answer = ""
         last_error = ""
-        for url in (HF_API_URL, HF_FALLBACK_URL):
+        for model in CHAT_MODELS:
             try:
-                answer = _call_hf(url, prompt, hf_token, max_new_tokens=600)
+                answer = _call_chat(model, system_prompt, question, hf_token)
                 if answer:
                     break
             except RuntimeError as exc:
                 last_error = str(exc)
-                logger.warning("Model %s failed: %s — trying fallback", url, exc)
+                logger.warning("Model %s failed: %s — trying next", model, exc)
 
         if not answer:
             return Response(
-                {"detail": last_error or "Model returned an empty response. Please try again."},
+                {"detail": last_error or "Akira returned an empty response. Please try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

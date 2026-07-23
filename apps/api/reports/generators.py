@@ -1,4 +1,5 @@
 import io
+from pathlib import Path
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
@@ -49,7 +50,18 @@ class PDFReportGenerator:
             'producer': producer,
             'generated_at': timezone.now(),
             'year': timezone.now().year,
+            'logo_data': self._load_logo(),
         }
+
+    @staticmethod
+    def _load_logo():
+        """Base64-encode the Synergy Media Labs logo for inline embedding."""
+        import base64
+        logo_path = Path(__file__).resolve().parent / 'static' / 'logo.jpg'
+        try:
+            return base64.b64encode(logo_path.read_bytes()).decode()
+        except OSError:
+            return ''
 
     def generate(self):
         html_string = render_to_string('reports/analysis_report.html', self._build_context())
