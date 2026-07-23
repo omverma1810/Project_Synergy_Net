@@ -3,10 +3,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from decimal import Decimal, InvalidOperation
+from django.http import HttpResponse
 from .models import Analysis, AnalysisResult
 from .serializers import AnalysisSerializer, AnalysisResultSerializer
 from .tasks import run_analysis, ensure_budget_has_line_items
 from .financial_model import build_from_budget
+from .financial_pdf import FinancialModelPDF
 from projects.models import Project, Budget
 
 
@@ -89,6 +91,66 @@ class AnalysisResultListView(generics.ListAPIView):
         return analysis.results.all()
 
 
+def _resolve_territory(request, project):
+    """Explicit ?territory=, else the top-ranked territory from the project's most
+    recent completed analysis, else None (engine defaults to Canary Islands)."""
+    from territories.models import Territory
+    territory_id = request.query_params.get('territory')
+    if territory_id:
+        return get_object_or_404(Territory, pk=territory_id)
+    latest = (
+        Analysis.objects.filter(project=project, status='COMPLETED')
+        .order_by('-completed_at')
+        .first()
+    )
+    if latest:
+        top = latest.results.order_by('rank').select_related('territory').first()
+        if top:
+            return top.territory
+    return None
+
+
+def _build_project_financial_model(request, project):
+    """Shared builder for the JSON + PDF views. Returns (model, budget, None) on
+    success or (None, None, error_response) on failure."""
+    budget_id = request.query_params.get('budget')
+    if budget_id:
+        budget = get_object_or_404(Budget, pk=budget_id, project=project)
+    else:
+        budget = project.budgets.order_by('-created_at').first()
+
+    if not budget:
+        return None, None, Response(
+            {'detail': 'No budget found. Upload a budget or add spend estimates first.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    ensure_budget_has_line_items(budget)
+    if not budget.line_items.exists():
+        return None, None, Response(
+            {'detail': 'Budget has no line items and no spend estimates to model.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    fx_rate = None
+    raw_fx = request.query_params.get('fx_rate')
+    if raw_fx:
+        try:
+            fx_rate = Decimal(str(raw_fx))
+            if fx_rate <= 0:
+                raise InvalidOperation
+        except (InvalidOperation, ValueError):
+            return None, None, Response(
+                {'detail': 'fx_rate must be a positive number.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    territory = _resolve_territory(request, project)
+    model = build_from_budget(budget, territory=territory, fx_rate=fx_rate)
+    model['project'] = {'id': project.id, 'title': project.title, 'budget_id': budget.id}
+    return model, budget, None
+
+
 class FinancialModelView(APIView):
     """GET /analysis/financial-model/<project_id>/
 
@@ -106,67 +168,33 @@ class FinancialModelView(APIView):
 
     def get(self, request, project_id):
         project = get_object_or_404(Project, pk=project_id, producer=request.user)
-
-        budget_id = request.query_params.get('budget')
-        if budget_id:
-            budget = get_object_or_404(Budget, pk=budget_id, project=project)
-        else:
-            budget = project.budgets.order_by('-created_at').first()
-
-        if not budget:
-            return Response(
-                {'detail': 'No budget found. Upload a budget or add spend estimates first.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        ensure_budget_has_line_items(budget)
-        if not budget.line_items.exists():
-            return Response(
-                {'detail': 'Budget has no line items and no spend estimates to model.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Resolve the incentive territory: explicit ?territory=, else the top-ranked
-        # territory from the project's most recent completed analysis, else default.
-        territory = self._resolve_territory(request, project)
-
-        fx_rate = None
-        raw_fx = request.query_params.get('fx_rate')
-        if raw_fx:
-            try:
-                fx_rate = Decimal(str(raw_fx))
-                if fx_rate <= 0:
-                    raise InvalidOperation
-            except (InvalidOperation, ValueError):
-                return Response(
-                    {'detail': 'fx_rate must be a positive number.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        model = build_from_budget(budget, territory=territory, fx_rate=fx_rate)
-        model['project'] = {
-            'id': project.id,
-            'title': project.title,
-            'budget_id': budget.id,
-        }
+        model, _budget, error = _build_project_financial_model(request, project)
+        if error is not None:
+            return error
         return Response(model)
 
-    @staticmethod
-    def _resolve_territory(request, project):
-        from territories.models import Territory
-        territory_id = request.query_params.get('territory')
-        if territory_id:
-            return get_object_or_404(Territory, pk=territory_id)
-        latest = (
-            Analysis.objects.filter(project=project, status='COMPLETED')
-            .order_by('-completed_at')
-            .first()
+
+class FinancialModelPDFView(APIView):
+    """GET /analysis/financial-model/<project_id>/pdf/ — the same model rendered as
+    a branded, investor-facing PDF (Investor Snapshot, Incentive Calculation,
+    Revenue Scenarios, Budget Sensitivity). Accepts the same query params."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(Project, pk=project_id, producer=request.user)
+        model, _budget, error = _build_project_financial_model(request, project)
+        if error is not None:
+            return error
+        try:
+            content = FinancialModelPDF(model, project).generate()
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response = HttpResponse(content, content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="synergy_financial_model_{project.id}.pdf"'
         )
-        if latest:
-            top = latest.results.order_by('rank').select_related('territory').first()
-            if top:
-                return top.territory
-        return None
+        response['Content-Length'] = len(content)
+        return response
 
 
 class TriggerAnalysisView(APIView):

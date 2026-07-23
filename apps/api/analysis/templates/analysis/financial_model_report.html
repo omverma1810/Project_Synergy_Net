@@ -1,0 +1,217 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Synergy Media Labs — {{ project.title }} Financial Model</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.6cm 1.6cm 2.2cm 1.6cm;
+            @bottom-center {
+                content: "Synergy Media Labs™  ·  Confidential Financial Model & Structuring Analysis  ·  Page " counter(page) " of " counter(pages);
+                font-family: Helvetica, Arial, sans-serif; font-size: 8px; color: #94a3b8;
+            }
+        }
+        * { box-sizing: border-box; }
+        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 11px; line-height: 1.5; }
+
+        .header { display: flex; align-items: center; justify-content: space-between;
+                  border-bottom: 3px solid #06b6d4; padding-bottom: 16px; margin-bottom: 8px; }
+        .brand { display: flex; align-items: center; }
+        .logo { font-size: 19px; font-weight: bold; color: #0f172a; letter-spacing: 0.5px; }
+        .logo .tm { font-size: 9px; vertical-align: super; color: #06b6d4; }
+        .subtitle { font-size: 8.5px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; }
+        .header-meta { text-align: right; font-size: 9px; color: #64748b; }
+
+        .eyebrow { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #06b6d4; }
+        h1 { font-size: 23px; color: #0f172a; margin: 20px 0 2px 0; }
+        .project-sub { color: #64748b; font-size: 11px; margin-bottom: 4px; }
+        h2 { font-size: 14px; color: #0f172a; margin-top: 24px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+
+        /* Hero metrics */
+        .hero { display: flex; gap: 10px; margin-top: 16px; }
+        .metric { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 13px 15px; background: #f8fafc; }
+        .metric .label { font-size: 8px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; }
+        .metric .value { font-size: 19px; font-weight: bold; color: #0f172a; margin-top: 3px; }
+        .metric.shield { background: #ecfdf5; border-color: #a7f3d0; }
+        .metric.shield .value { color: #047857; }
+        .metric.exposure { background: #ecfeff; border-color: #a5f3fc; }
+        .metric.exposure .value { color: #0891b2; }
+
+        .callout { margin-top: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #06b6d4;
+                   border-radius: 8px; padding: 11px 14px; font-size: 10.5px; color: #334155; }
+
+        /* Capital-stack waterline */
+        .bar { height: 26px; border-radius: 6px; overflow: hidden; margin-top: 14px; display: flex; }
+        .bar .seg-shield { background: #10b981; height: 100%; }
+        .bar .seg-investor { background: #06b6d4; height: 100%; }
+        .bar-legend { margin-top: 7px; font-size: 9px; color: #64748b; }
+        .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 0 12px; }
+        .dot.s { background: #10b981; } .dot.i { background: #06b6d4; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th { background: #0f172a; color: #fff; padding: 8px 9px; text-align: left; font-size: 9px;
+             text-transform: uppercase; letter-spacing: 0.5px; }
+        th.num, td.num { text-align: right; }
+        td { padding: 7px 9px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }
+        tr.highlight td { background: #ecfdf5; font-weight: bold; }
+        .pill { font-size: 7.5px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+                padding: 2px 7px; border-radius: 8px; }
+        .pill.pass { background: #dcfce7; color: #15803d; }
+        .pill.capped { background: #fef9c3; color: #a16207; }
+        .pill.fail { background: #fee2e2; color: #b91c1c; }
+
+        .disclaimer { margin-top: 26px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="brand">
+            {% if logo_data %}
+            <img src="data:image/jpeg;base64,{{ logo_data }}" alt="Synergy Media Labs"
+                 style="height: 50px; border-radius: 8px; margin-right: 12px;" />
+            {% endif %}
+            <div>
+                <div class="logo">SYNERGY MEDIA LABS<span class="tm">™</span></div>
+                <div class="subtitle">Financial Model &amp; Structuring Analysis</div>
+            </div>
+        </div>
+        <div class="header-meta">
+            Generated {{ generated_at|date:"F j, Y" }}<br>
+            {% if program.name %}{{ program.name }}<br>{% endif %}
+            {{ currency }}
+        </div>
+    </div>
+
+    <div class="eyebrow">Investor Snapshot</div>
+    <h1>{{ project.title }}</h1>
+    <div class="project-sub">
+        Net-Cash-Exposure model{% if program.territory %} · {{ program.territory }}{% endif %}
+        {% if program.mode %} · {{ program.mode }} rebate{% endif %}
+    </div>
+
+    <!-- Hero: Gross → Tax Shield → Net Exposure -->
+    <div class="hero">
+        <div class="metric">
+            <div class="label">Gross Budget</div>
+            <div class="value">{{ currency }} {{ capital_stack.gross_budget|floatformat:0|intcomma }}</div>
+        </div>
+        <div class="metric shield">
+            <div class="label">Tax Shield (rebate)</div>
+            <div class="value">{{ currency }} {{ capital_stack.tax_shield|floatformat:0|intcomma }}</div>
+        </div>
+        <div class="metric exposure">
+            <div class="label">Net Cash Exposure</div>
+            <div class="value">{{ currency }} {{ capital_stack.net_cash_exposure|floatformat:0|intcomma }}</div>
+        </div>
+    </div>
+
+    <div class="callout">
+        The {{ currency }} {{ capital_stack.tax_shield|floatformat:0|intcomma }} incentive acts as a first-loss safety
+        buffer, protecting roughly {{ capital_stack.buffer_pct|floatformat:0|intcomma }}% of the gross budget. The true
+        investor hurdle is <strong>{{ currency }} {{ capital_stack.net_cash_exposure|floatformat:0|intcomma }}</strong> —
+        below the gross budget — so the project begins with ~{{ capital_stack.buffer_pct|floatformat:0|intcomma }}% of
+        downside already protected.
+    </div>
+
+    <!-- Capital-stack waterline -->
+    <div class="bar">
+        <div class="seg-shield" style="width: {{ capital_stack.buffer_pct }}%;"></div>
+        <div class="seg-investor" style="width: {{ capital_stack.investor_pct }}%;"></div>
+    </div>
+    <div class="bar-legend">
+        <span class="dot s"></span> Tax incentive — first-loss buffer ({{ capital_stack.buffer_pct|floatformat:1 }}%)
+        <span class="dot i"></span> Investor capital — net exposure ({{ capital_stack.investor_pct|floatformat:1 }}%)
+    </div>
+
+    <!-- Incentive calculation -->
+    <h2>Incentive Calculation</h2>
+    <table>
+        <thead><tr><th>Metric</th><th class="num">Value</th></tr></thead>
+        <tbody>
+            <tr><td>Gross Production Budget</td><td class="num">{{ currency }} {{ incentive.gross_budget|floatformat:0|intcomma }}</td></tr>
+            <tr><td>Eligible Spend (after haircuts)</td><td class="num">{{ currency }} {{ incentive.eligible_spend|floatformat:0|intcomma }}</td></tr>
+            <tr><td>Eligible Spend (law currency)</td><td class="num">{{ incentive.eligible_spend_law_ccy|floatformat:0|intcomma }}</td></tr>
+            <tr><td>Estimated Rebate</td><td class="num">{{ currency }} {{ incentive.rebate|floatformat:0|intcomma }}</td></tr>
+            <tr><td>Blended Rebate Rate</td><td class="num">{{ incentive.blended_rate|floatformat:1 }}%</td></tr>
+            <tr><td>Eligible Spend / Gross</td><td class="num">{{ incentive.eligible_of_gross|floatformat:1 }}%</td></tr>
+            <tr class="highlight"><td>Net Cash Exposure</td><td class="num">{{ currency }} {{ incentive.net_cash_exposure|floatformat:0|intcomma }}</td></tr>
+        </tbody>
+    </table>
+
+    <table>
+        <thead><tr><th>Compliance Check</th><th class="num">Threshold</th><th class="num">Value</th><th>Status</th></tr></thead>
+        <tbody>
+            <tr><td>Minimum Shoot Days</td><td class="num">{{ compliance.min_shoot_days.threshold }}</td><td class="num">{{ compliance.min_shoot_days.value }}</td>
+                <td><span class="pill {{ compliance.min_shoot_days.status|lower }}">{{ compliance.min_shoot_days.status }}</span></td></tr>
+            <tr><td>Minimum Local Spend</td><td class="num">{{ compliance.min_local_spend.threshold|floatformat:0|intcomma }}</td><td class="num">{{ compliance.min_local_spend.value|floatformat:0|intcomma }}</td>
+                <td><span class="pill {{ compliance.min_local_spend.status|lower }}">{{ compliance.min_local_spend.status }}</span></td></tr>
+            <tr><td>Cost Cap (eligible % of gross)</td><td class="num">{{ compliance.cost_cap.threshold|floatformat:0|intcomma }}%</td><td class="num">{{ compliance.cost_cap.value|floatformat:1 }}%</td>
+                <td><span class="pill {{ compliance.cost_cap.status|lower }}">{{ compliance.cost_cap.status }}</span></td></tr>
+            <tr><td>Rebate Legal Cap</td><td class="num">{% if compliance.legal_cap.threshold %}{{ compliance.legal_cap.threshold|floatformat:0|intcomma }}{% else %}—{% endif %}</td><td class="num">{{ compliance.legal_cap.value|floatformat:0|intcomma }}</td>
+                <td><span class="pill {{ compliance.legal_cap.status|lower }}">{{ compliance.legal_cap.status }}</span></td></tr>
+        </tbody>
+    </table>
+
+    <!-- Revenue scenarios -->
+    <h2>Revenue Scenarios — Floor / Base / Breakout</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Scenario</th>
+                <th class="num">Worldwide Gross</th>
+                <th class="num">Less 30% Haircut</th>
+                <th class="num">Net Project Revenue</th>
+                <th class="num">Coverage</th>
+                <th>Covers Exposure</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in scenarios %}
+            <tr {% if s.covers_exposure %}class="highlight"{% endif %}>
+                <td style="text-transform: capitalize;">{{ s.scenario }}</td>
+                <td class="num">{{ currency }} {{ s.worldwide_gross|floatformat:0|intcomma }}</td>
+                <td class="num">({{ currency }} {{ s.distribution_haircut|floatformat:0|intcomma }})</td>
+                <td class="num">{{ currency }} {{ s.net_project_revenue|floatformat:0|intcomma }}</td>
+                <td class="num">{{ s.coverage_multiple|floatformat:1 }}x</td>
+                <td><span class="pill {% if s.covers_exposure %}pass{% else %}fail{% endif %}">
+                    {% if s.covers_exposure %}YES{% else %}NO{% endif %}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="callout">
+        Coverage multiple = Net Project Revenue ÷ Net Cash Exposure. A multiple ≥ 1.0x means the scenario
+        returns the investor's cash. Revenues are gross before the mandatory 30% sales-agent / P&amp;A
+        distribution haircut; obtain current sales-agent quotes before reliance.
+    </div>
+
+    <!-- Budget sensitivity -->
+    <h2>Budget Sensitivity</h2>
+    <table>
+        <thead>
+            <tr><th>Scenario</th><th class="num">Gross Budget</th><th class="num">Rebate</th><th class="num">Net Cash Exposure</th><th class="num">Blended Rate</th></tr>
+        </thead>
+        <tbody>
+            {% for r in sensitivity %}
+            <tr>
+                <td>{{ r.scenario }}</td>
+                <td class="num">{{ currency }} {{ r.gross_budget|floatformat:0|intcomma }}</td>
+                <td class="num">{{ currency }} {{ r.rebate|floatformat:0|intcomma }}</td>
+                <td class="num">{{ currency }} {{ r.net_cash_exposure|floatformat:0|intcomma }}</td>
+                <td class="num">{{ r.blended_rate|floatformat:1 }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="disclaimer">
+        <strong>Confidential.</strong> This document is a preliminary financial model for informational purposes
+        only and does not constitute an offer to sell or a solicitation to purchase securities. All projections
+        are forward-looking estimates subject to market, distribution, incentive-audit, foreign-exchange, and
+        regulatory risk, and may vary materially. Revenue benchmarks are modelled defaults pending sales-agent
+        confirmation. © {{ year }} Synergy Media Corporation. All rights reserved.
+    </div>
+</body>
+</html>
