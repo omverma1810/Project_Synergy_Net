@@ -43,6 +43,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [finError, setFinError] = useState('');
   const [finPdf, setFinPdf] = useState(false);
   const [bizPdf, setBizPdf] = useState(false);
+  const [editRev, setEditRev] = useState(false);
+  const [revRows, setRevRows] = useState<{ name: string; floor: string; base: string; breakout: string }[]>([]);
+  const [savingRev, setSavingRev] = useState(false);
 
   useEffect(() => {
     const pid = parseInt(id);
@@ -98,6 +101,49 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       toast.error((e as Error).message || 'PDF generation failed');
     } finally {
       setFinPdf(false);
+    }
+  };
+
+  const startEditRevenue = () => {
+    setRevRows((finModel?.revenue_windows || []).map(w => ({
+      name: w.name, floor: String(w.floor), base: String(w.base), breakout: String(w.breakout),
+    })));
+    setEditRev(true);
+  };
+
+  const reloadModel = () => { setFinModel(null); setFinError(''); };
+
+  const saveRevenue = async () => {
+    setSavingRev(true);
+    try {
+      const revenue_overrides = revRows.map(r => ({
+        name: r.name,
+        floor: parseFloat(r.floor) || 0,
+        base: parseFloat(r.base) || 0,
+        breakout: parseFloat(r.breakout) || 0,
+      }));
+      await api.projects.update(parseInt(id), { revenue_overrides });
+      toast.success('Revenue inputs saved');
+      setEditRev(false);
+      reloadModel();
+    } catch (e: unknown) {
+      toast.error((e as Error).message || 'Could not save revenue inputs');
+    } finally {
+      setSavingRev(false);
+    }
+  };
+
+  const resetRevenue = async () => {
+    setSavingRev(true);
+    try {
+      await api.projects.update(parseInt(id), { revenue_overrides: [] });
+      toast.success('Reset to modelled defaults');
+      setEditRev(false);
+      reloadModel();
+    } catch (e: unknown) {
+      toast.error((e as Error).message || 'Could not reset');
+    } finally {
+      setSavingRev(false);
     }
   };
 
@@ -497,6 +543,65 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     <p className="text-xs text-synergy-muted mt-3">
                       Coverage = Net Project Revenue ÷ Net Cash Exposure (≥ 1.0x returns investor cash). Gross is before the 30% distribution haircut; replace with sales-agent quotes when available.
                     </p>
+                  </div>
+
+                  {/* Editable revenue inputs */}
+                  <div className="glass-card p-6">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                      <h2 className="section-title">Revenue Inputs</h2>
+                      <span className={`text-xs ${finModel.revenue_source === 'custom' ? 'text-synergy-green' : 'text-synergy-muted'}`}>
+                        {finModel.revenue_source === 'custom' ? '● Your sales-agent quotes' : '○ Modelled benchmark defaults'}
+                      </span>
+                    </div>
+                    {!editRev ? (
+                      <>
+                        <p className="text-xs text-synergy-muted mb-4">
+                          Per-window Floor / Base / Breakout revenue. Replace the modelled defaults with real sales-agent quotes to sharpen every scenario, PDF and coverage multiple.
+                        </p>
+                        <button onClick={startEditRevenue} className="btn-secondary text-sm">Edit revenue inputs</button>
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-synergy-border text-synergy-muted">
+                                <th className="text-left py-2 px-2 font-medium">Window / Region</th>
+                                <th className="text-right py-2 px-2 font-medium">Floor</th>
+                                <th className="text-right py-2 px-2 font-medium">Base</th>
+                                <th className="text-right py-2 px-2 font-medium">Breakout</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {revRows.map((r, i) => (
+                                <tr key={i} className="border-b border-synergy-border/30">
+                                  <td className="py-1.5 px-2 text-synergy-text">{r.name}</td>
+                                  {(['floor', 'base', 'breakout'] as const).map(k => (
+                                    <td key={k} className="py-1.5 px-2">
+                                      <input
+                                        type="number"
+                                        value={r[k]}
+                                        onChange={e => setRevRows(prev => prev.map((row, j) => j === i ? { ...row, [k]: e.target.value } : row))}
+                                        className="form-input w-28 text-right py-1 text-xs"
+                                      />
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <motion.button whileTap={{ scale: 0.98 }} onClick={saveRevenue} disabled={savingRev}
+                            className="btn-primary flex items-center gap-2 text-sm">
+                            {savingRev && <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />}
+                            Save &amp; recompute
+                          </motion.button>
+                          <button onClick={() => setEditRev(false)} className="btn-secondary text-sm" disabled={savingRev}>Cancel</button>
+                          <button onClick={resetRevenue} className="btn-secondary text-sm ml-auto" disabled={savingRev}>Reset to defaults</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Sensitivity */}

@@ -264,6 +264,7 @@ export interface ProjectDetail extends ProjectSummary {
   vetting_reviewed_at: string | null;
   target_territory: number | null;
   target_territory_name?: string | null;
+  revenue_overrides?: { name: string; floor: number; base: number; breakout: number }[];
   budgets: Budget[];
 }
 
@@ -377,10 +378,20 @@ export interface PolicyAlert {
   created_at: string;
 }
 
+export interface RevenueWindow {
+  name: string;
+  floor: number;
+  base: number;
+  breakout: number;
+}
+
 export interface FinancialModel {
   currency: string;
   project: { id: number; title: string; budget_id: number };
   program?: { name: string; mode: 'flat' | 'tiered'; territory: string | null };
+  revenue_source?: 'custom' | 'default';
+  revenue_windows?: RevenueWindow[];
+  distribution_haircut_pct?: number;
   incentive: {
     gross_budget: number;
     eligible_spend: number;

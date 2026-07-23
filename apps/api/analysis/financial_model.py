@@ -659,6 +659,22 @@ def build_from_budget(budget, *, territory=None, windows=None, fx_rate=None, pro
     if fx_rate is None:
         fx_rate = Decimal("1.1724")
 
+    # Revenue windows priority: explicit arg → producer overrides on the project →
+    # modelled default benchmarks.
+    revenue_source = "default"
+    overrides = getattr(project, "revenue_overrides", None)
+    if windows is None and overrides:
+        windows = [
+            RevenueWindow(
+                name=str(w.get("name", "Window")),
+                floor=_d(w.get("floor", 0)),
+                base=_d(w.get("base", 0)),
+                breakout=_d(w.get("breakout", 0)),
+            )
+            for w in overrides if isinstance(w, dict)
+        ]
+        if windows:
+            revenue_source = "custom"
     if windows is None:
         windows = default_revenue_windows(gross)
 
@@ -676,4 +692,5 @@ def build_from_budget(budget, *, territory=None, windows=None, fx_rate=None, pro
         "mode": "flat" if (program and program.flat_rate is not None) else "tiered",
         "territory": getattr(territory, "name", None) if territory is not None else "Canary Islands",
     }
+    model["revenue_source"] = revenue_source
     return model

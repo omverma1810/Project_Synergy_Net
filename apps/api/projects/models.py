@@ -63,6 +63,11 @@ class Project(models.Model):
         null=True, blank=True, related_name='target_projects',
     )
 
+    # Producer-supplied revenue window overrides for the financial model. Each entry
+    # is {name, floor, base, breakout}; when present, replaces the modelled default
+    # benchmarks so the model reflects real sales-agent quotes.
+    revenue_overrides = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
