@@ -172,7 +172,7 @@ export const api = {
       const qs = projectId ? `?project=${projectId}` : '';
       return request<{ count: number; results: Analysis[] } | Analysis[]>(`/analysis/${qs}`).then(unwrapList);
     },
-    financialModel: (projectId: number, params?: { budget?: number; fx_rate?: number }) => {
+    financialModel: (projectId: number, params?: { budget?: number; territory?: number; fx_rate?: number }) => {
       const qs = params
         ? '?' + new URLSearchParams(
             Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))

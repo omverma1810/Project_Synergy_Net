@@ -10,6 +10,7 @@ Run standalone:  python -m unittest analysis.tests.test_financial_model
 """
 import unittest
 from decimal import Decimal
+from types import SimpleNamespace
 
 from analysis.financial_model import (
     BudgetLine,
@@ -22,6 +23,8 @@ from analysis.financial_model import (
     compute_eligible_spend,
     compute_incentive,
     default_revenue_windows,
+    flat_program,
+    program_from_territory,
     project_revenue,
 )
 
@@ -164,6 +167,56 @@ class DefaultWindowsTests(unittest.TestCase):
         for w in windows:
             self.assertLessEqual(w.floor, w.base)
             self.assertLessEqual(w.base, w.breakout)
+
+
+class FlatProgramTests(unittest.TestCase):
+    def test_flat_rebate_no_fx(self):
+        prog = flat_program("UK AVEC", Decimal("25.5"), currency="GBP")
+        r = compute_incentive(Decimal("2000000"), Decimal("1000000"), fx_rate=Decimal("1"), program=prog)
+        # 25.5% of 1,000,000 = 255,000; net = 2,000,000 − 255,000.
+        self.assertEqual(r.rebate, Decimal("255000"))
+        self.assertEqual(r.net_cash_exposure, Decimal("1745000"))
+        self.assertEqual(r.blended_rate, Decimal("25.5"))
+
+    def test_flat_program_legal_cap(self):
+        prog = flat_program("Capped", Decimal("30"), legal_cap=Decimal("100000"))
+        r = compute_incentive(Decimal("2000000"), Decimal("1000000"), fx_rate=Decimal("1"), program=prog)
+        # 30% of 1M = 300,000 but capped at 100,000.
+        self.assertEqual(r.rebate, Decimal("100000"))
+        self.assertTrue(r.capped_by_legal_cap)
+
+    def test_flat_program_no_cost_cap(self):
+        # Flat programs use cost_cap_pct=100 → eligible up to 100% of gross allowed.
+        prog = flat_program("NoCap", Decimal("40"))
+        r = compute_incentive(Decimal("1000000"), Decimal("1000000"), fx_rate=Decimal("1"), program=prog)
+        self.assertFalse(r.capped_by_cost_cap)
+        self.assertEqual(r.eligible_spend, Decimal("1000000"))
+
+    def test_program_from_territory_flat(self):
+        terr = SimpleNamespace(
+            country_code="GB", name="UK AVEC", base_percentage=Decimal("25.5"),
+            provincial_percentage=Decimal("0"), is_stackable=False,
+            is_capped=False, max_rebate_cap=None, currency="GBP", min_spend=Decimal("1000000"),
+        )
+        prog, fx = program_from_territory(terr)
+        self.assertEqual(fx, Decimal("1"))
+        self.assertIsNotNone(prog.flat_rate)
+        self.assertEqual(prog.flat_rate, Decimal("25.5"))
+
+    def test_program_from_territory_stacking(self):
+        terr = SimpleNamespace(
+            country_code="CA_BC", name="BC", base_percentage=Decimal("16"),
+            provincial_percentage=Decimal("35"), is_stackable=True,
+            is_capped=False, max_rebate_cap=None, currency="CAD", min_spend=Decimal("0"),
+        )
+        prog, _ = program_from_territory(terr)
+        self.assertEqual(prog.flat_rate, Decimal("51"))  # 16 + 35 stacked
+
+    def test_program_from_territory_canary_is_tiered(self):
+        terr = SimpleNamespace(country_code="ES_CI", name="Canary Islands")
+        prog, fx = program_from_territory(terr)
+        self.assertIsNone(prog.flat_rate)          # tiered
+        self.assertEqual(fx, Decimal("1.1724"))
 
 
 class FullModelTests(unittest.TestCase):

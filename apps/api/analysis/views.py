@@ -98,7 +98,9 @@ class FinancialModelView(APIView):
 
     Optional query params:
       ?budget=<id>       use a specific budget instead of the latest
-      ?fx_rate=<float>   presentation-currency units per 1 EUR (default 1.1724)
+      ?territory=<id>    incentive program to model (default: top-ranked from the
+                         project's latest analysis, else Canary Islands)
+      ?fx_rate=<float>   override FX (presentation-currency units per 1 EUR)
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -124,7 +126,11 @@ class FinancialModelView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        fx_rate = Decimal('1.1724')
+        # Resolve the incentive territory: explicit ?territory=, else the top-ranked
+        # territory from the project's most recent completed analysis, else default.
+        territory = self._resolve_territory(request, project)
+
+        fx_rate = None
         raw_fx = request.query_params.get('fx_rate')
         if raw_fx:
             try:
@@ -137,13 +143,30 @@ class FinancialModelView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        model = build_from_budget(budget, fx_rate=fx_rate)
+        model = build_from_budget(budget, territory=territory, fx_rate=fx_rate)
         model['project'] = {
             'id': project.id,
             'title': project.title,
             'budget_id': budget.id,
         }
         return Response(model)
+
+    @staticmethod
+    def _resolve_territory(request, project):
+        from territories.models import Territory
+        territory_id = request.query_params.get('territory')
+        if territory_id:
+            return get_object_or_404(Territory, pk=territory_id)
+        latest = (
+            Analysis.objects.filter(project=project, status='COMPLETED')
+            .order_by('-completed_at')
+            .first()
+        )
+        if latest:
+            top = latest.results.order_by('rank').select_related('territory').first()
+            if top:
+                return top.territory
+        return None
 
 
 class TriggerAnalysisView(APIView):

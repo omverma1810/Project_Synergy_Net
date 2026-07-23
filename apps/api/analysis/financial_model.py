@@ -123,19 +123,85 @@ def compute_eligible_spend(lines: Iterable[BudgetLine]) -> Decimal:
 
 @dataclass(frozen=True)
 class IncentiveProgram:
-    """A territory rebate program. Defaults model the Canary Islands (Ley 27/2014
-    Art. 36.2) used by the reference workbook."""
+    """A territory rebate program.
+
+    Two modes:
+    - **Tiered** (default = Canary Islands, Ley 27/2014 Art. 36.2): 54% on the
+      first €1M of eligible spend, 45% above, computed in a law currency (EUR)
+      via an FX rate, with an 80% cost cap and a €36M legal cap.
+    - **Flat**: set `flat_rate` to a single percentage; tier fields are ignored,
+      no FX conversion is applied (rebate is a straight % of eligible spend in the
+      presentation currency). Used for every non-Canary territory whose incentive
+      is a flat rebate on qualified spend.
+    """
 
     name: str = "Canary Islands (Ley 27/2014 Art. 36.2)"
     currency: str = "EUR"                       # law currency
+    flat_rate: Decimal | None = None            # set → flat-rate program (ignores tiers/FX)
     first_tier_ceiling: Decimal = Decimal("1000000")   # EUR
     first_tier_rate: Decimal = Decimal("54")           # % on first tier
     excess_rate: Decimal = Decimal("45")               # % above first tier
-    conservative_flat_rate: Decimal = Decimal("45")    # Scenario B flat rate
-    min_spend: Decimal = Decimal("1000000")            # EUR feature threshold
+    conservative_flat_rate: Decimal = Decimal("45")    # downside scenario rate
+    min_spend: Decimal = Decimal("1000000")            # min eligible spend threshold
     min_shoot_days: int = 14
-    cost_cap_pct: Decimal = Decimal("80")              # eligible ≤ 80% of total cost
-    legal_cap: Decimal = Decimal("36000000")           # EUR per production
+    cost_cap_pct: Decimal = Decimal("80")              # eligible ≤ cost_cap_pct% of total cost
+    legal_cap: Decimal | None = Decimal("36000000")    # max rebate per production (None = uncapped)
+
+
+def flat_program(
+    name: str,
+    rate: Decimal,
+    *,
+    currency: str = "USD",
+    min_spend: Decimal = ZERO,
+    legal_cap: Decimal | None = None,
+    min_shoot_days: int = 0,
+) -> IncentiveProgram:
+    """Build a flat-rate rebate program (rebate = rate% of eligible spend)."""
+    rate = _d(rate)
+    return IncentiveProgram(
+        name=name,
+        currency=currency,
+        flat_rate=rate,
+        conservative_flat_rate=max(ZERO, rate - Decimal("5")),  # downside = −5 pts
+        min_spend=_d(min_spend),
+        min_shoot_days=min_shoot_days,
+        cost_cap_pct=Decimal("100"),   # no 80% cap for generic flat programs
+        legal_cap=legal_cap,
+    )
+
+
+CANARY_ISLANDS = IncentiveProgram()  # tiered defaults
+
+
+def program_from_territory(territory) -> tuple[IncentiveProgram, Decimal]:
+    """Return (program, fx_rate) for a Django Territory.
+
+    Canary Islands uses the tiered EUR program (with USD/EUR FX); every other
+    territory uses a flat program in its own currency (fx = 1, rebate stays in the
+    budget's currency, matching how the existing IncentiveEngine treats rebates).
+    """
+    code = getattr(territory, "country_code", "") or ""
+    if code == "ES_CI":
+        return CANARY_ISLANDS, Decimal("1.1724")
+
+    rate = _d(getattr(territory, "base_percentage", 0))
+    if getattr(territory, "is_stackable", False) and getattr(territory, "provincial_percentage", 0):
+        rate += _d(territory.provincial_percentage)
+
+    legal_cap = None
+    if getattr(territory, "is_capped", False):
+        legal_cap = getattr(territory, "max_rebate_cap", None)
+        legal_cap = _d(legal_cap) if legal_cap is not None else None
+
+    program = flat_program(
+        name=f"{getattr(territory, 'name', 'Territory')} ({code})",
+        rate=rate,
+        currency=getattr(territory, "currency", "USD") or "USD",
+        min_spend=_d(getattr(territory, "min_spend", 0) or 0),
+        legal_cap=legal_cap,
+    )
+    return program, Decimal("1")
 
 
 @dataclass
@@ -175,7 +241,12 @@ class IncentiveResult:
 
 
 def _tiered_rebate(eligible_law_ccy: Decimal, program: IncentiveProgram) -> tuple[Decimal, Decimal, Decimal]:
-    """Return (first_tier_rebate, excess_rebate, total) in law currency."""
+    """Return (first_tier_rebate, excess_rebate, total) in law currency.
+
+    For a flat-rate program the whole amount is a single "first-tier" rebate."""
+    if program.flat_rate is not None:
+        total = eligible_law_ccy * program.flat_rate / Decimal("100")
+        return total, ZERO, total
     first_base = min(eligible_law_ccy, program.first_tier_ceiling)
     excess_base = max(ZERO, eligible_law_ccy - program.first_tier_ceiling)
     first_rebate = first_base * program.first_tier_rate / Decimal("100")
@@ -212,8 +283,8 @@ def compute_incentive(
 
     first_rebate, excess_rebate, rebate_law = _tiered_rebate(eligible_law, program)
 
-    # Legal cap (law currency).
-    capped_by_legal_cap = rebate_law > program.legal_cap
+    # Legal cap (law currency; None = uncapped).
+    capped_by_legal_cap = program.legal_cap is not None and rebate_law > program.legal_cap
     if capped_by_legal_cap:
         rebate_law = program.legal_cap
 
@@ -239,7 +310,7 @@ def compute_incentive(
             "status": "PASS" if not capped_by_cost_cap else "CAPPED",
         },
         "legal_cap": {
-            "threshold": float(program.legal_cap),
+            "threshold": float(program.legal_cap) if program.legal_cap is not None else None,
             "value": float(money(rebate_law)),
             "status": "PASS" if not capped_by_legal_cap else "CAPPED",
         },
@@ -417,17 +488,27 @@ def budget_sensitivity(
     rows.append(row("Base", gross_budget, eligible_spend, program))
     rows.append(row("5% Cost Overrun", gross_budget * Decimal("1.05"), eligible_spend, program))
     rows.append(row("10% Cost Overrun", gross_budget * Decimal("1.10"), eligible_spend, program))
-    # Rebate downside — conservative flat rate on both tiers.
-    downside = IncentiveProgram(
-        name=program.name + " (downside)",
-        first_tier_rate=program.conservative_flat_rate,
-        excess_rate=program.conservative_flat_rate,
-        first_tier_ceiling=program.first_tier_ceiling,
-        min_spend=program.min_spend,
-        min_shoot_days=program.min_shoot_days,
-        cost_cap_pct=program.cost_cap_pct,
-        legal_cap=program.legal_cap,
-    )
+    # Rebate downside — conservative rate.
+    if program.flat_rate is not None:
+        downside = flat_program(
+            program.name + " (downside)",
+            program.conservative_flat_rate,
+            currency=program.currency,
+            min_spend=program.min_spend,
+            legal_cap=program.legal_cap,
+            min_shoot_days=program.min_shoot_days,
+        )
+    else:
+        downside = IncentiveProgram(
+            name=program.name + " (downside)",
+            first_tier_rate=program.conservative_flat_rate,
+            excess_rate=program.conservative_flat_rate,
+            first_tier_ceiling=program.first_tier_ceiling,
+            min_spend=program.min_spend,
+            min_shoot_days=program.min_shoot_days,
+            cost_cap_pct=program.cost_cap_pct,
+            legal_cap=program.legal_cap,
+        )
     rows.append(row("Rebate Downside", gross_budget, eligible_spend, downside))
     # No incentive.
     rows.append({
@@ -549,8 +630,12 @@ def budget_lines_from_django(budget) -> list[BudgetLine]:
     return lines
 
 
-def build_from_budget(budget, *, windows=None, fx_rate=Decimal("1.1724"), program=None) -> dict:
-    """Django entry point: build the full financial model from a saved Budget."""
+def build_from_budget(budget, *, territory=None, windows=None, fx_rate=None, program=None) -> dict:
+    """Django entry point: build the full financial model from a saved Budget.
+
+    If `territory` is given, the incentive program and FX are derived from it via
+    `program_from_territory()` (Canary Islands → tiered EUR, otherwise flat in the
+    territory's currency). Explicit `program`/`fx_rate` override the territory."""
     from django.db.models import Sum
 
     gross = budget.line_items.aggregate(total=Sum("amount"))["total"] or ZERO
@@ -558,9 +643,18 @@ def build_from_budget(budget, *, windows=None, fx_rate=Decimal("1.1724"), progra
     project = budget.project
     shoot_days = getattr(project, "shoot_duration_days", None) or 25
     currency = getattr(project, "currency", "USD") or "USD"
+
+    if territory is not None and program is None:
+        program, terr_fx = program_from_territory(territory)
+        if fx_rate is None:
+            fx_rate = terr_fx
+    if fx_rate is None:
+        fx_rate = Decimal("1.1724")
+
     if windows is None:
         windows = default_revenue_windows(gross)
-    return build_financial_model(
+
+    model = build_financial_model(
         gross_budget=gross,
         eligible_lines=lines,
         windows=windows,
@@ -569,3 +663,9 @@ def build_from_budget(budget, *, windows=None, fx_rate=Decimal("1.1724"), progra
         program=program,
         currency=currency,
     )
+    model["program"] = {
+        "name": (program or CANARY_ISLANDS).name,
+        "mode": "flat" if (program and program.flat_rate is not None) else "tiered",
+        "territory": getattr(territory, "name", None) if territory is not None else "Canary Islands",
+    }
+    return model
