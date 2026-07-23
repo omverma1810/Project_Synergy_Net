@@ -10,10 +10,10 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
-import { api, ProjectDetail, Analysis, AnalysisResult } from '@/lib/api';
+import { api, ProjectDetail, Analysis, AnalysisResult, FinancialModel } from '@/lib/api';
 import Layout from '@/components/Layout';
 
-const TABS = ['Overview', 'Budget', 'Analysis', 'Reports'];
+const TABS = ['Overview', 'Budget', 'Analysis', 'Financials', 'Reports'];
 
 const STATUS_BADGES: Record<string, string> = {
   DRAFT: 'badge-muted', UPLOADED: 'badge-cyan', ANALYZING: 'badge-orange',
@@ -38,6 +38,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [generatingReport, setGeneratingReport] = useState<'PDF' | 'XLSX' | null>(null);
+  const [finModel, setFinModel] = useState<FinancialModel | null>(null);
+  const [finLoading, setFinLoading] = useState(false);
+  const [finError, setFinError] = useState('');
+  const [finPdf, setFinPdf] = useState(false);
 
   useEffect(() => {
     const pid = parseInt(id);
@@ -63,6 +67,36 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     } catch (e: unknown) {
       toast.error((e as Error).message || 'Failed to start analysis', { id: t });
       setAnalyzing(false);
+    }
+  };
+
+  // Lazily load the financial model when the Financials tab is first opened.
+  useEffect(() => {
+    if (activeTab !== 3 || finModel || finLoading || finError) return;
+    setFinLoading(true);
+    api.analysis.financialModel(parseInt(id))
+      .then(setFinModel)
+      .catch((e: unknown) => setFinError((e as Error).message || 'Could not build the financial model.'))
+      .finally(() => setFinLoading(false));
+  }, [activeTab, id, finModel, finLoading, finError]);
+
+  const handleFinancialPdf = async () => {
+    setFinPdf(true);
+    try {
+      const blob = await api.analysis.financialModelPdf(parseInt(id));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `synergy_financial_model_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Financial model PDF ready');
+    } catch (e: unknown) {
+      toast.error((e as Error).message || 'PDF generation failed');
+    } finally {
+      setFinPdf(false);
     }
   };
 
@@ -299,6 +333,172 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         )}
 
         {activeTab === 3 && (
+          <div className="space-y-6">
+            {finLoading && (
+              <div className="grid sm:grid-cols-3 gap-4">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-24 skeleton rounded-2xl" />)}
+              </div>
+            )}
+
+            {finError && !finLoading && (
+              <div className="glass-card p-8 text-center">
+                <p className="text-synergy-muted text-sm">{finError}</p>
+                <p className="text-synergy-subtle text-xs mt-2">Add a budget or spend estimates, then reopen this tab.</p>
+              </div>
+            )}
+
+            {finModel && !finLoading && (() => {
+              const cur = finModel.currency;
+              const cs = finModel.capital_stack;
+              const inc = finModel.incentive;
+              const scenarios = (['floor', 'base', 'breakout'] as const).map(k => finModel.revenue_scenarios[k]).filter(Boolean);
+              const complianceRows = Object.entries(inc.compliance).filter(
+                ([, v]) => typeof v === 'object'
+              ) as [string, { threshold: number; value: number; status: string }][];
+              return (
+                <>
+                  {/* Hero: Gross → Tax Shield → Net Exposure */}
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div className="glass-card p-5">
+                      <p className="text-xs text-synergy-muted uppercase tracking-wide">Gross Budget</p>
+                      <p className="text-2xl font-bold text-synergy-text mt-1">{fmt(cs.gross_budget, cur)}</p>
+                    </div>
+                    <div className="glass-card p-5 border-synergy-green/30">
+                      <p className="text-xs text-synergy-muted uppercase tracking-wide">Tax Shield (rebate)</p>
+                      <p className="text-2xl font-bold text-synergy-green mt-1">{fmt(cs.tax_shield, cur)}</p>
+                    </div>
+                    <div className="glass-card p-5 border-synergy-cyan/30">
+                      <p className="text-xs text-synergy-muted uppercase tracking-wide">Net Cash Exposure</p>
+                      <p className="text-2xl font-bold text-synergy-cyan mt-1">{fmt(cs.net_cash_exposure, cur)}</p>
+                    </div>
+                  </div>
+
+                  {/* Capital-stack waterline */}
+                  <div className="glass-card p-6">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                      <h2 className="section-title">Capital Stack</h2>
+                      <span className="text-xs text-synergy-muted">
+                        {finModel.program?.territory} · {finModel.program?.mode} rebate
+                      </span>
+                    </div>
+                    <div className="flex h-7 rounded-lg overflow-hidden">
+                      <div className="bg-synergy-green h-full flex items-center justify-center" style={{ width: `${cs.buffer_pct}%` }}>
+                        <span className="text-[10px] font-bold text-synergy-darker">{cs.buffer_pct.toFixed(0)}%</span>
+                      </div>
+                      <div className="bg-synergy-cyan h-full flex items-center justify-center" style={{ width: `${cs.investor_pct}%` }}>
+                        <span className="text-[10px] font-bold text-synergy-darker">{cs.investor_pct.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-synergy-muted mt-3">
+                      The {fmt(cs.tax_shield, cur)} incentive is a first-loss buffer protecting ~{cs.buffer_pct.toFixed(0)}% of the
+                      gross budget. The true investor hurdle is <span className="text-synergy-text font-medium">{fmt(cs.net_cash_exposure, cur)}</span> — below the gross budget.
+                    </p>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={handleFinancialPdf} disabled={finPdf}
+                      className="btn-primary flex items-center gap-2 mt-4"
+                    >
+                      {finPdf
+                        ? <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
+                        : <DocumentArrowDownIcon className="h-4 w-4" />}
+                      Download Financial Model PDF
+                    </motion.button>
+                  </div>
+
+                  {/* Incentive calculation */}
+                  <div className="glass-card p-6">
+                    <h2 className="section-title mb-4">Incentive Calculation</h2>
+                    <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                      {[
+                        ['Gross Production Budget', fmt(inc.gross_budget, cur)],
+                        ['Eligible Spend (after haircuts)', fmt(inc.eligible_spend, cur)],
+                        ['Estimated Rebate', fmt(inc.rebate, cur)],
+                        ['Blended Rebate Rate', `${inc.blended_rate.toFixed(1)}%`],
+                        ['Eligible / Gross', `${inc.eligible_of_gross.toFixed(1)}%`],
+                        ['Net Cash Exposure', fmt(inc.net_cash_exposure, cur)],
+                      ].map(([k, v]) => (
+                        <div key={k} className="flex justify-between border-b border-synergy-border/30 py-1.5">
+                          <span className="text-synergy-muted">{k}</span>
+                          <span className="text-synergy-text font-medium font-mono">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      {complianceRows.map(([k, v]) => (
+                        <span key={k} className={
+                          v.status === 'PASS' ? 'badge-green' : v.status === 'CAPPED' ? 'badge-orange' : 'badge-red'
+                        }>
+                          {k.replace(/_/g, ' ')}: {v.status}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Revenue scenarios */}
+                  <div className="glass-card p-6">
+                    <h2 className="section-title mb-4">Revenue Scenarios</h2>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-synergy-border text-synergy-muted">
+                            <th className="text-left py-2 px-3 font-medium">Scenario</th>
+                            <th className="text-right py-2 px-3 font-medium">Worldwide Gross</th>
+                            <th className="text-right py-2 px-3 font-medium">Net Revenue</th>
+                            <th className="text-right py-2 px-3 font-medium">Coverage</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scenarios.map(s => (
+                            <tr key={s.scenario} className={`border-b border-synergy-border/30 ${s.covers_exposure ? 'bg-synergy-green/5' : ''}`}>
+                              <td className="py-2 px-3 capitalize text-synergy-text">{s.scenario}</td>
+                              <td className="py-2 px-3 text-right font-mono text-synergy-text">{fmt(s.worldwide_gross, cur)}</td>
+                              <td className="py-2 px-3 text-right font-mono text-synergy-text">{fmt(s.net_project_revenue, cur)}</td>
+                              <td className={`py-2 px-3 text-right font-mono font-semibold ${s.covers_exposure ? 'text-synergy-green' : 'text-synergy-muted'}`}>
+                                {s.coverage_multiple.toFixed(1)}x
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-synergy-muted mt-3">
+                      Coverage = Net Project Revenue ÷ Net Cash Exposure (≥ 1.0x returns investor cash). Gross is before the 30% distribution haircut; replace with sales-agent quotes when available.
+                    </p>
+                  </div>
+
+                  {/* Sensitivity */}
+                  <div className="glass-card p-6">
+                    <h2 className="section-title mb-4">Budget Sensitivity</h2>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-synergy-border text-synergy-muted">
+                            <th className="text-left py-2 px-3 font-medium">Scenario</th>
+                            <th className="text-right py-2 px-3 font-medium">Gross</th>
+                            <th className="text-right py-2 px-3 font-medium">Rebate</th>
+                            <th className="text-right py-2 px-3 font-medium">Net Exposure</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {finModel.sensitivity.map(r => (
+                            <tr key={r.scenario} className="border-b border-synergy-border/30">
+                              <td className="py-2 px-3 text-synergy-text">{r.scenario}</td>
+                              <td className="py-2 px-3 text-right font-mono text-synergy-muted">{fmt(r.gross_budget, cur)}</td>
+                              <td className="py-2 px-3 text-right font-mono text-synergy-muted">{fmt(r.rebate, cur)}</td>
+                              <td className="py-2 px-3 text-right font-mono text-synergy-text">{fmt(r.net_cash_exposure, cur)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {activeTab === 4 && (
           <div className="glass-card p-6">
             <h2 className="section-title mb-4">Generate Reports</h2>
             {latestAnalysis ? (

@@ -362,6 +362,7 @@ export interface PolicyAlert {
 export interface FinancialModel {
   currency: string;
   project: { id: number; title: string; budget_id: number };
+  program?: { name: string; mode: 'flat' | 'tiered'; territory: string | null };
   incentive: {
     gross_budget: number;
     eligible_spend: number;
