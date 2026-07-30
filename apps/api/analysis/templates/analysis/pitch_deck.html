@@ -20,7 +20,9 @@
         .accent-bar { position: absolute; top: 0; left: 0; height: 100%; width: 10px;
                       background: linear-gradient(180deg, #22d3ee, #3b82f6, #a78bfa); }
         .cyan { color: #22d3ee; }
-        .grad { background: linear-gradient(90deg, #22d3ee, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        /* WeasyPrint doesn't support background-clip:text, so gradient "text" falls
+           back to a solid accent color rather than rendering invisible. */
+        .grad { color: #22d3ee; }
 
         .kicker { font-size: 13px; text-transform: uppercase; letter-spacing: 5px; color: #64748b; margin-bottom: 18px; }
         .title { font-size: 78px; font-weight: bold; line-height: 1.02; letter-spacing: -1px; }

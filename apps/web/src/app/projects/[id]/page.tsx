@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -29,8 +29,8 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className={cls}>#{rank}</span>;
 }
 
-export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
