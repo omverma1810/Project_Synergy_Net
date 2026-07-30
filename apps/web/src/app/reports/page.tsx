@@ -18,23 +18,26 @@ async function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-const DELIVERABLES: { key: 'financialModel' | 'businessPlan' | 'pitchDeck'; label: string; file: string }[] = [
+const DELIVERABLES: { key: 'financialModel' | 'businessPlan' | 'pitchDeck' | 'financialStructuring'; label: string; file: string }[] = [
   { key: 'financialModel', label: 'Financial Model', file: 'financial_model' },
   { key: 'businessPlan', label: 'Business Plan', file: 'business_plan' },
   { key: 'pitchDeck', label: 'Pitch Deck', file: 'pitch_deck' },
+  { key: 'financialStructuring', label: 'Full Structuring Analysis', file: 'financial_structuring' },
 ];
 
 function ProjectDeliverables({ project }: { project: ProjectSummary }) {
   const [busy, setBusy] = useState<string | null>(null);
 
-  const handleDownload = async (key: 'financialModel' | 'businessPlan' | 'pitchDeck', file: string) => {
+  const handleDownload = async (key: 'financialModel' | 'businessPlan' | 'pitchDeck' | 'financialStructuring', file: string) => {
     setBusy(key);
     try {
       const blob = key === 'financialModel'
         ? await api.analysis.financialModelPdf(project.id)
         : key === 'businessPlan'
         ? await api.analysis.businessPlanPdf(project.id)
-        : await api.analysis.pitchDeckPdf(project.id);
+        : key === 'pitchDeck'
+        ? await api.analysis.pitchDeckPdf(project.id)
+        : await api.analysis.financialStructuringPdf(project.id);
       await downloadBlob(blob, `synergy_${file}_${project.id}.pdf`);
       toast.success(`${DELIVERABLES.find(d => d.key === key)?.label} PDF ready`);
     } catch (e: unknown) {

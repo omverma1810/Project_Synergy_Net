@@ -75,6 +75,25 @@ class Project(models.Model):
     # until this is set, matching the reference workbook's audit-ready stance.
     creative_staff_local_resident = models.BooleanField(default=False)
 
+    # Named roles distinct from `producer` (the account holder). The reference
+    # structuring-analysis workbook lists Director / Producer / Executive Producer
+    # as separate credited roles even when they're the same person.
+    director = models.CharField(max_length=255, blank=True)
+    executive_producer = models.CharField(max_length=255, blank=True)
+
+    # Diligence/greenlight controls for the Assumptions & Controls tab. Each entry
+    # is {area, owner, status, risk_level}; defaults to the five standard rows
+    # (Budget Lock, Tax Incentive Qualification, Completion/Delivery Risk, Cash
+    # Management, Legal Chain of Title) when empty — see financial_model.py
+    # DEFAULT_DILIGENCE_CONTROLS. Producer-editable, same pattern as revenue_overrides.
+    diligence_controls = models.JSONField(default=list, blank=True)
+
+    # Cash-flow draw schedule as % of gross budget for the Finance Summary tab.
+    # {prep_pct, photography_pct, post_pct, delivery_pct}; defaults to the
+    # industry-standard 15/55/20/10 split when empty — see financial_model.py
+    # DEFAULT_DRAW_SCHEDULE.
+    draw_schedule = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -121,6 +140,11 @@ class Budget(models.Model):
 
 
 class BudgetLineItem(models.Model):
+    class CommitmentStatus(models.TextChoices):
+        BUDGETED_UNCOMMITTED = 'BUDGETED_UNCOMMITTED', 'Budgeted / Uncommitted'
+        BUDGETED_COMMITTED = 'BUDGETED_COMMITTED', 'Budgeted / Committed'
+        ACTUAL = 'ACTUAL', 'Actual'
+
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='line_items')
     account_code = models.CharField(max_length=50, blank=True)
     description = models.CharField(max_length=500)
@@ -131,6 +155,18 @@ class BudgetLineItem(models.Model):
     is_local_eligible = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     sort_order = models.IntegerField(default=0)
+
+    # Granular cost-reporting fields for the Budget Breakdown tab (top-sheet
+    # convention: amount = units x rate when both are given; otherwise amount is
+    # entered directly). All optional — existing spend-estimate/upload-derived
+    # line items keep working with just `amount`.
+    vendor_name = models.CharField(max_length=255, blank=True)
+    units = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rate = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    actual_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    commitment_status = models.CharField(
+        max_length=25, choices=CommitmentStatus.choices, default=CommitmentStatus.BUDGETED_UNCOMMITTED,
+    )
 
     class Meta:
         db_table = 'budget_line_items'

@@ -58,6 +58,7 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
             'target_territory', 'spend_estimates',
             'cast_crew_info', 'production_timeline',
             'creative_staff_local_resident', 'revenue_overrides',
+            'director', 'executive_producer', 'diligence_controls', 'draw_schedule',
             'script_file', 'shooting_plan_file',
         ]
         read_only_fields = ['id']

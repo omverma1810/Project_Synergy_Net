@@ -11,6 +11,7 @@ from .financial_model import build_from_budget
 from .financial_pdf import FinancialModelPDF
 from .business_plan_pdf import BusinessPlanPDF
 from .pitch_deck_pdf import PitchDeckPDF
+from .financial_structuring_pdf import FinancialStructuringPDF
 from projects.models import Project, Budget
 
 
@@ -246,6 +247,33 @@ class PitchDeckPDFView(APIView):
         response = HttpResponse(content, content_type='application/pdf')
         response['Content-Disposition'] = (
             f'attachment; filename="synergy_pitch_deck_{project.id}.pdf"'
+        )
+        response['Content-Length'] = len(content)
+        return response
+
+
+class FinancialStructuringPDFView(APIView):
+    """GET /analysis/financial-structuring/<project_id>/pdf/ — the full 12-tab
+    Financial Model & Structuring Analysis workbook (Archetype C, complete):
+    Project Financial Index, Market Executive Summary, Finance 101, Assumptions
+    & Controls, Finance Summary, Budget Overview, Budget Breakdown, Incentive
+    Calculation, Revenue Projections, Project Performance Estimator, Disclosures
+    & Risk Factors, Investor Snapshot. Same query params as the other model
+    endpoints."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, project_id):
+        project = get_object_or_404(Project, pk=project_id, producer=request.user)
+        model, budget, error = _build_project_financial_model(request, project)
+        if error is not None:
+            return error
+        try:
+            content = FinancialStructuringPDF(model, project, budget).generate()
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response = HttpResponse(content, content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="synergy_financial_structuring_{project.id}.pdf"'
         )
         response['Content-Length'] = len(content)
         return response

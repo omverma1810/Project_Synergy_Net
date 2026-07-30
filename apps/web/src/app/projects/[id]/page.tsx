@@ -64,6 +64,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const [finPdf, setFinPdf] = useState(false);
   const [bizPdf, setBizPdf] = useState(false);
   const [deckPdf, setDeckPdf] = useState(false);
+  const [structPdf, setStructPdf] = useState(false);
   const [editRev, setEditRev] = useState(false);
   const [revRows, setRevRows] = useState<{ name: string; floor: string; base: string; breakout: string }[]>([]);
   const [savingRev, setSavingRev] = useState(false);
@@ -218,6 +219,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     downloadPdf(() => api.analysis.businessPlanPdf(parseInt(id), territoryParam()), `synergy_business_plan_${id}.pdf`, setBizPdf, 'Business plan PDF ready');
   const handlePitchDeck = () =>
     downloadPdf(() => api.analysis.pitchDeckPdf(parseInt(id), territoryParam()), `synergy_pitch_deck_${id}.pdf`, setDeckPdf, 'Pitch deck PDF ready');
+  const handleFinancialStructuring = () =>
+    downloadPdf(() => api.analysis.financialStructuringPdf(parseInt(id), territoryParam()), `synergy_financial_structuring_${id}.pdf`, setStructPdf, 'Full structuring analysis PDF ready');
 
   const startEditDetails = () => {
     setDetailsTerritory(project?.target_territory ? String(project.target_territory) : '');
@@ -758,6 +761,16 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                           : <DocumentArrowDownIcon className="h-4 w-4" />}
                         Pitch Deck PDF
                       </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={handleFinancialStructuring} disabled={structPdf}
+                        className="btn-secondary flex items-center gap-2"
+                      >
+                        {structPdf
+                          ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                          : <DocumentArrowDownIcon className="h-4 w-4" />}
+                        Full Structuring Analysis PDF
+                      </motion.button>
                     </div>
                   </div>
 
@@ -950,6 +963,16 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                     ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
                     : <DocumentArrowDownIcon className="h-4 w-4" />}
                   Pitch Deck PDF
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleFinancialStructuring} disabled={structPdf}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  {structPdf
+                    ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                    : <DocumentArrowDownIcon className="h-4 w-4" />}
+                  Full Structuring Analysis PDF
                 </motion.button>
               </div>
             </div>

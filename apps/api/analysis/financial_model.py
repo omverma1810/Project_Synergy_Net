@@ -706,3 +706,203 @@ def build_from_budget(budget, *, territory=None, windows=None, fx_rate=None, pro
     }
     model["revenue_source"] = revenue_source
     return model
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 25-account budget taxonomy — Full Structuring Analysis (Budget Overview /
+# Budget Breakdown tabs). Mirrors the reference workbook's chart of accounts.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# (acct_no, acct_name, group) — group in {"ATL", "BTL", "POST", "OTHER"}.
+BUDGET_ACCOUNTS: tuple[tuple[int, str, str], ...] = (
+    (1, "Writer / Director / Producer", "ATL"),
+    (2, "Producer", "ATL"),
+    (3, "Principal Cast", "ATL"),
+    (4, "Supporting Cast", "ATL"),
+    (5, "ATL Expenses & Fringes", "ATL"),
+    (6, "Production Management", "BTL"),
+    (7, "Camera / Sound", "BTL"),
+    (8, "Lighting & Grip", "BTL"),
+    (9, "Art Department", "BTL"),
+    (10, "Costume / Hair / Makeup", "BTL"),
+    (11, "Locations", "BTL"),
+    (12, "Transportation", "BTL"),
+    (13, "Travel & Accommodations", "BTL"),
+    (14, "Catering / Craft Services", "BTL"),
+    (15, "SFX", "BTL"),
+    (16, "Crowd / Extras", "BTL"),
+    (17, "Production Insurance", "BTL"),
+    (18, "Post Picture / Editorial", "POST"),
+    (19, "Post Sound", "POST"),
+    (20, "Music", "POST"),
+    (21, "Visual Effects", "POST"),
+    (22, "Color / DI", "POST"),
+    (23, "Legal Fees", "OTHER"),
+    (24, "Contingency", "OTHER"),
+    (25, "Overheads", "OTHER"),
+)
+_ACCOUNTS_BY_NO = {a[0]: a for a in BUDGET_ACCOUNTS}
+
+# Keyword -> account number. Order matters: first match wins, so more specific /
+# compound phrases precede broad single-word fallbacks (e.g. "line producer"
+# before generic "producer"; "re-recording" before generic "sound").
+_ACCOUNT_KEYWORD_RULES: tuple[tuple[tuple[str, ...], int], ...] = (
+    (("legal fee",), 23),
+    (("contingency",), 24),
+    (("overhead", "admin"), 25),
+    (("re-recording", "adr", "foley", "sound design", "sound editing", "studio rental"), 19),
+    (("editor", "post picture", "editorial", "assembly"), 18),
+    (("composer", "orchestration", "music licens", "score"), 20),
+    (("vfx", "visual effect", "cgi", "compositing"), 21),
+    (("colorist", "di suite", "color grad", "color / di"), 22),
+    (("sfx",), 15),
+    (("crowd", "extras"), 16),
+    (("production insurance", "insurance"), 17),
+    (("line producer", "upm", "assistant director", "production coordinator",
+      "production assistant", "production management"), 6),
+    (("writer / director", "writer/director", "writer", "director"), 1),
+    (("principal cast", "lead actor"), 3),
+    (("supporting cast",), 4),
+    (("atl expense", "atl fringe"), 5),
+    (("producer",), 2),
+    (("dp", "camera operator", "camera equipment", "sound mixer", "boom", "camera / sound"), 7),
+    (("gaffer", "electric", "key grip", "grip", "lighting"), 8),
+    (("production designer", "set construction", "set dressing", "props", "animal handler", "art department"), 9),
+    (("costume", "wardrobe", "makeup", "wigs", "hair"), 10),
+    (("location fee", "location permit", "scout", "locations"), 11),
+    (("driver", "vehicle rental", "fuel", "transportation"), 12),
+    (("flight", "hotel", "housing", "per diem", "travel", "accommodation"), 13),
+    (("catering", "craft service"), 14),
+    (("cast",), 3),  # broad fallback after principal/supporting-specific matches
+)
+
+
+def classify_account(description: str, category: str = "", is_above_the_line: bool | None = None) -> tuple[int, str, str]:
+    """Best-effort classification of a budget line into one of the 25 canonical
+    accounts used by the reference structuring-analysis workbook. Returns
+    (acct_no, acct_name, group).
+
+    Some terms (`Fringes`, `Travel / Accommodation`) recur near-identically across
+    both ATL account 5 and several BTL accounts in the reference workbook itself
+    — they aren't keyword-distinguishable in isolation. When the line's own
+    `is_above_the_line` flag is known and true, these route to account 5 (ATL
+    Expenses & Fringes) before the general keyword table runs; this is why that
+    flag is checked here rather than being just a display attribute.
+    """
+    haystack = f"{description} {category}".lower()
+    if is_above_the_line:
+        if any(k in haystack for k in ("fringe", "travel", "accommodation", "expense", "transport")):
+            return _ACCOUNTS_BY_NO[5]
+    for keywords, acct_no in _ACCOUNT_KEYWORD_RULES:
+        if any(k in haystack for k in keywords):
+            return _ACCOUNTS_BY_NO[acct_no]
+    return _ACCOUNTS_BY_NO[25]  # unclassified spend defaults to Overheads
+
+
+def budget_account_summary(line_items) -> list[dict]:
+    """Group Django BudgetLineItems into the 25-account taxonomy for the Budget
+    Overview tab. Each item's own `account_code` (e.g. "6.2") is respected as an
+    authoritative override when its leading integer is a valid account number;
+    otherwise the line is auto-classified by keyword. Returns one row per account
+    that has spend, in canonical account order, with subtotal/actual/variance and
+    its ATL/BTL/POST/OTHER group."""
+    totals: dict[int, dict] = {}
+    for item in line_items:
+        acct_no = None
+        if getattr(item, "account_code", None):
+            try:
+                candidate = int(str(item.account_code).split(".")[0])
+                if candidate in _ACCOUNTS_BY_NO:
+                    acct_no = candidate
+            except (ValueError, TypeError):
+                acct_no = None
+        if acct_no is None:
+            acct_no, _, _ = classify_account(
+                item.description, item.category or "",
+                is_above_the_line=getattr(item, "is_above_the_line", None),
+            )
+
+        _, acct_name, group = _ACCOUNTS_BY_NO[acct_no]
+        row = totals.setdefault(acct_no, {
+            "acct_no": acct_no, "name": acct_name, "group": group,
+            "subtotal": ZERO, "actual": ZERO, "has_actual": False,
+        })
+        row["subtotal"] += _d(item.amount)
+        actual = getattr(item, "actual_amount", None)
+        if actual is not None:
+            row["actual"] += _d(actual)
+            row["has_actual"] = True
+
+    rows = []
+    for acct_no in sorted(totals):
+        row = totals[acct_no]
+        actual = row["actual"] if row["has_actual"] else None
+        variance = (row["subtotal"] - actual) if actual is not None else None
+        rows.append({
+            "acct_no": acct_no,
+            "name": row["name"],
+            "group": row["group"],
+            "subtotal": float(money(row["subtotal"])),
+            "actual": float(money(actual)) if actual is not None else None,
+            "variance": float(money(variance)) if variance is not None else None,
+        })
+    return rows
+
+
+def top_cost_centers(account_rows: list[dict], n: int = 10, gross_budget: Decimal = ZERO) -> list[dict]:
+    """Rank accounts by spend and compute % of gross, for the Finance Summary
+    tab's Top 10 Cost Centers table."""
+    gross_budget = _d(gross_budget) or ZERO
+    ranked = sorted(account_rows, key=lambda r: r["subtotal"], reverse=True)[:n]
+    out = []
+    for i, r in enumerate(ranked, 1):
+        pct = (Decimal(str(r["subtotal"])) / gross_budget * Decimal("100")) if gross_budget else ZERO
+        out.append({"rank": i, "name": r["name"], "amount": r["subtotal"], "pct_gross": float(pct.quantize(Decimal("0.1")))})
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Diligence controls & cash-flow draw schedule — Assumptions & Controls / Finance
+# Summary tabs. Producer-editable via Project.diligence_controls / draw_schedule;
+# fall back to these defaults when empty.
+# ─────────────────────────────────────────────────────────────────────────────
+
+DEFAULT_DILIGENCE_CONTROLS: tuple[dict, ...] = (
+    {"area": "Budget Lock", "owner": "Producer / Line Producer", "status": "Open", "risk_level": "Medium"},
+    {"area": "Tax Incentive Qualification", "owner": "Producer / Tax Advisor", "status": "Open", "risk_level": "High"},
+    {"area": "Completion / Delivery Risk", "owner": "Producer / Bond Co.", "status": "Open", "risk_level": "Medium"},
+    {"area": "Cash Management", "owner": "Producer / Finance", "status": "Open", "risk_level": "Medium"},
+    {"area": "Legal Chain of Title", "owner": "Legal", "status": "Open", "risk_level": "High"},
+)
+
+DEFAULT_DRAW_SCHEDULE: dict = {
+    "prep_pct": 15, "photography_pct": 55, "post_pct": 20, "delivery_pct": 10,
+}
+
+
+def diligence_controls_for(project) -> list[dict]:
+    controls = getattr(project, "diligence_controls", None)
+    if controls:
+        return controls
+    return list(DEFAULT_DILIGENCE_CONTROLS)
+
+
+def draw_schedule_for(project, gross_budget: Decimal) -> list[dict]:
+    """Return the cash-flow draw schedule as [{phase, timing, pct, amount}, ...],
+    summing to the gross budget."""
+    schedule = getattr(project, "draw_schedule", None) or DEFAULT_DRAW_SCHEDULE
+    gross_budget = _d(gross_budget)
+    phases = [
+        ("Prep / Development", "Pre-production", _d(schedule.get("prep_pct", 15))),
+        ("Principal Photography", "Shoot period", _d(schedule.get("photography_pct", 55))),
+        ("Post-Production", "Post period", _d(schedule.get("post_pct", 20))),
+        ("Delivery / Wrap", "Delivery", _d(schedule.get("delivery_pct", 10))),
+    ]
+    rows = []
+    for name, timing, pct in phases:
+        rows.append({
+            "phase": name, "timing": timing,
+            "pct": float(pct),
+            "amount": float(money(gross_budget * pct / Decimal("100"))),
+        })
+    return rows

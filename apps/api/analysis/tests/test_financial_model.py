@@ -14,24 +14,36 @@ from types import SimpleNamespace
 
 from analysis.financial_model import (
     BudgetLine,
+    DEFAULT_DILIGENCE_CONTROLS,
+    DEFAULT_DRAW_SCHEDULE,
     HaircutCategory,
     IncentiveProgram,
     RevenueWindow,
+    budget_account_summary,
     budget_lines_from_django,
     build_financial_model,
     budget_sensitivity,
+    classify_account,
     classify_line,
     compute_eligible_spend,
     compute_incentive,
     default_revenue_windows,
+    diligence_controls_for,
+    draw_schedule_for,
     flat_program,
     program_from_territory,
     project_revenue,
+    top_cost_centers,
 )
 
 
-def _fake_line(description, amount, category="", is_local_eligible=False):
-    return SimpleNamespace(description=description, amount=Decimal(str(amount)), category=category, is_local_eligible=is_local_eligible)
+def _fake_line(description, amount, category="", is_local_eligible=False, is_above_the_line=False, actual_amount=None, account_code=""):
+    return SimpleNamespace(
+        description=description, amount=Decimal(str(amount)), category=category,
+        is_local_eligible=is_local_eligible, is_above_the_line=is_above_the_line,
+        actual_amount=Decimal(str(actual_amount)) if actual_amount is not None else None,
+        account_code=account_code,
+    )
 
 
 def _fake_budget(lines, residency_confirmed=False):
@@ -279,6 +291,148 @@ class FullModelTests(unittest.TestCase):
         # ~30% government-backed buffer.
         self.assertAlmostEqual(cs["buffer_pct"], 30.1, delta=0.2)
         self.assertIn("breakout", model["revenue_scenarios"])
+
+
+class BudgetAccountTaxonomyTests(unittest.TestCase):
+    """Pins classify_account() against every real line-item name from the
+    reference workbook's Budget Breakdown tab (accounts 1-25)."""
+
+    REFERENCE_CASES = [
+        ("Writer / Director / Producer", False, 1),
+        ("Producer", False, 2),
+        ("Lead Actor (Name TBD)", False, 3),
+        ("Supporting Cast", False, 4),
+        ("Expenses – Travel / Accommodation / Transport", True, 5),
+        ("Fringes / SAG", True, 5),
+        ("Line Producer / UPM", False, 6),
+        ("Assistant Director", False, 6),
+        ("Production Coordinator + Team", False, 6),
+        ("DP", False, 7),
+        ("Camera Operators / ACs", False, 7),
+        ("Camera Equipment Rental", False, 7),
+        ("Sound Mixer & Boom", False, 7),
+        ("Gaffer / Electric Team", False, 8),
+        ("Key Grip / Grips Team", False, 8),
+        ("Lighting / Grip Equipment", False, 8),
+        ("Production Designer", False, 9),
+        ("Set Construction / Dressing", False, 9),
+        ("Props", False, 9),
+        ("Animal Handlers (Horses)", False, 9),
+        ("Costume Designer", False, 10),
+        ("Costume Staff", False, 10),
+        ("Wardrobe", False, 10),
+        ("Hair & Makeup", False, 10),
+        ("Materials / Wigs / Aging", False, 10),
+        ("Location Fees / Permits", False, 11),
+        ("Scout", False, 11),
+        ("Drivers", False, 12),
+        ("Vehicle Rentals", False, 12),
+        ("Fuel / Logistics", False, 12),
+        ("Flights (Cast & Key Crew)", False, 13),
+        ("Hotels / Housing", False, 13),
+        ("Per Diems", False, 13),
+        ("Catering", False, 14),
+        ("Craft Services", False, 14),
+        ("SFX", False, 15),
+        ("Crowd / Extras (150–200)", False, 16),
+        ("Production Insurance", False, 17),
+        ("Editor", False, 18),
+        ("Assistant Editor", False, 18),
+        ("Sound Designer / Re-Recording Mixer", False, 19),
+        ("ADR / Foley / Sound Editing", False, 19),
+        ("Sound Mix / Studio Rental", False, 19),
+        ("Composer", False, 20),
+        ("Orchestration / Recording", False, 20),
+        ("Music Licensing", False, 20),
+        ("VFX Supervisor", False, 21),
+        ("CGI / Compositing / AI Enhancements", False, 21),
+        ("VFX Pipeline & Software", False, 21),
+        ("Colorist", False, 22),
+        ("DI Suite / Grading", False, 22),
+        ("Legal Fees", False, 23),
+        ("Contingency", False, 24),
+        ("Overheads / Production Admin", False, 25),
+    ]
+
+    def test_every_reference_line_item_classifies_correctly(self):
+        for desc, is_atl, expected in self.REFERENCE_CASES:
+            acct_no, _name, _group = classify_account(desc, is_above_the_line=is_atl)
+            self.assertEqual(acct_no, expected, f'"{desc}" (ATL={is_atl}) -> {acct_no}, expected {expected}')
+
+    def test_account_code_override_takes_priority_over_keywords(self):
+        # A line whose account_code is set should never be reclassified by keyword,
+        # even if its description would otherwise mislead the classifier.
+        line = _fake_line("Miscellaneous local supplier", 5000, account_code="14.3")
+        rows = budget_account_summary([line])
+        self.assertEqual(rows[0]["acct_no"], 14)
+
+    def test_group_assignment(self):
+        self.assertEqual(classify_account("Producer")[2], "ATL")
+        self.assertEqual(classify_account("Gaffer")[2], "BTL")
+        self.assertEqual(classify_account("Editor")[2], "POST")
+        self.assertEqual(classify_account("Legal Fees")[2], "OTHER")
+
+
+class BudgetAccountSummaryTests(unittest.TestCase):
+    def test_groups_and_sums_by_account(self):
+        lines = [
+            _fake_line("Producer", 150000, is_above_the_line=True),
+            _fake_line("Lead Actor (Name TBD)", 500000, is_above_the_line=True),
+            _fake_line("Lead Actor (Name TBD)", 300000, is_above_the_line=True),
+            _fake_line("Gaffer / Electric Team", 70000),
+        ]
+        rows = budget_account_summary(lines)
+        by_acct = {r["acct_no"]: r for r in rows}
+        self.assertEqual(by_acct[2]["subtotal"], 150000.0)
+        self.assertEqual(by_acct[3]["subtotal"], 800000.0)  # two Lead Actor lines summed
+        self.assertEqual(by_acct[8]["subtotal"], 70000.0)
+        self.assertIsNone(by_acct[8]["actual"])  # no actual_amount supplied -> None, not 0
+
+    def test_variance_computed_when_actual_present(self):
+        lines = [_fake_line("Editor", 100000, actual_amount=90000)]
+        rows = budget_account_summary(lines)
+        self.assertEqual(rows[0]["actual"], 90000.0)
+        self.assertEqual(rows[0]["variance"], 10000.0)
+
+
+class TopCostCentersTests(unittest.TestCase):
+    def test_ranks_and_computes_pct_of_gross(self):
+        rows = [
+            {"acct_no": 3, "name": "Principal Cast", "group": "ATL", "subtotal": 800000.0},
+            {"acct_no": 9, "name": "Art Department", "group": "BTL", "subtotal": 289000.0},
+            {"acct_no": 24, "name": "Contingency", "group": "OTHER", "subtotal": 250000.0},
+        ]
+        top = top_cost_centers(rows, n=2, gross_budget=Decimal("4145000"))
+        self.assertEqual(len(top), 2)
+        self.assertEqual(top[0]["name"], "Principal Cast")
+        self.assertEqual(top[0]["rank"], 1)
+        self.assertAlmostEqual(top[0]["pct_gross"], 19.3, delta=0.1)
+
+
+class DiligenceAndDrawScheduleTests(unittest.TestCase):
+    def test_diligence_defaults_when_project_has_none(self):
+        project = SimpleNamespace(diligence_controls=[])
+        controls = diligence_controls_for(project)
+        self.assertEqual(len(controls), len(DEFAULT_DILIGENCE_CONTROLS))
+        self.assertEqual(controls[0]["area"], "Budget Lock")
+
+    def test_diligence_uses_project_overrides_when_present(self):
+        custom = [{"area": "Custom Check", "owner": "X", "status": "Closed", "risk_level": "Low"}]
+        project = SimpleNamespace(diligence_controls=custom)
+        self.assertEqual(diligence_controls_for(project), custom)
+
+    def test_draw_schedule_defaults_sum_to_gross(self):
+        project = SimpleNamespace(draw_schedule={})
+        rows = draw_schedule_for(project, Decimal("4145000"))
+        total = sum(r["amount"] for r in rows)
+        self.assertAlmostEqual(total, 4145000.0, delta=1.0)
+        self.assertEqual(rows[0]["phase"], "Prep / Development")
+        self.assertEqual(rows[0]["pct"], 15.0)
+
+    def test_draw_schedule_respects_project_override(self):
+        project = SimpleNamespace(draw_schedule={"prep_pct": 20, "photography_pct": 50, "post_pct": 20, "delivery_pct": 10})
+        rows = draw_schedule_for(project, Decimal("1000000"))
+        self.assertEqual(rows[0]["amount"], 200000.0)
 
 
 if __name__ == "__main__":
