@@ -630,10 +630,22 @@ def classify_line(description: str, category: str = "", *, is_local_eligible: bo
 
 
 def budget_lines_from_django(budget) -> list[BudgetLine]:
-    """Convert a Django Budget's line items into engine BudgetLine objects."""
+    """Convert a Django Budget's line items into engine BudgetLine objects.
+
+    If the project has confirmed creative-staff local/EEA residency
+    (`creative_staff_local_resident`), ATL creative lines are classified as
+    resident (100% eligible) instead of the conservative residency-TBD default
+    (0% eligible) — matching the reference workbook's audit-trail behaviour.
+    """
     lines: list[BudgetLine] = []
+    residency_confirmed = getattr(budget.project, "creative_staff_local_resident", False)
     for item in budget.line_items.all():
         cat = classify_line(item.description, item.category or "", is_local_eligible=item.is_local_eligible)
+        # Only the residency-TBD creative-staff bucket is affected by the
+        # project-level confirmation — never widen eligibility for unmatched
+        # or non-creative lines.
+        if cat == HaircutCategory.CREATIVE_STAFF_TBD and residency_confirmed:
+            cat = HaircutCategory.CREATIVE_STAFF_RESIDENT
         lines.append(BudgetLine(description=item.description, amount=_d(item.amount), category=cat))
     return lines
 

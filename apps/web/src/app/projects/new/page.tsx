@@ -26,8 +26,12 @@ const step1Schema = z.object({
 type Step1Data = z.infer<typeof step1Schema>;
 
 interface SpendRow { category: string; amount: string; }
+interface CastRow { role: string; name: string; status: string; }
+interface TimelineRow { milestone: string; date: string; }
 
-const STEPS = ['Basic Info', 'Spend Estimates', 'Files & Submit'];
+const STEPS = ['Basic Info', 'Spend Estimates', 'Cast & Schedule', 'Files & Submit'];
+
+const CAST_STATUS_OPTIONS = ['Attached', 'In Talks', 'Potential'];
 
 const slideVariants = {
   enter: (dir: number) => ({ x: dir * 40, opacity: 0 }),
@@ -49,6 +53,9 @@ export default function NewProjectPage() {
   const [dir, setDir] = useState(1);
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
   const [estimates, setEstimates] = useState<SpendRow[]>(DEFAULT_ESTIMATES);
+  const [cast, setCast] = useState<CastRow[]>([{ role: '', name: '', status: 'Attached' }]);
+  const [timeline, setTimeline] = useState<TimelineRow[]>([{ milestone: 'Shoot Start', date: '' }]);
+  const [residencyConfirmed, setResidencyConfirmed] = useState(false);
   const [budgetFile, setBudgetFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -80,6 +87,17 @@ export default function NewProjectPage() {
         return acc;
       }, {});
 
+      const castRows = cast.filter(c => c.name.trim());
+      const cast_crew_info = castRows.length
+        ? { cast: castRows.map(c => ({ role: c.role || 'Role TBD', name: c.name, status: c.status })) }
+        : {};
+
+      const timelineRows = timeline.filter(t => t.milestone.trim() && t.date.trim());
+      const production_timeline = timelineRows.reduce<Record<string, string>>((acc, t) => {
+        acc[t.milestone] = t.date;
+        return acc;
+      }, {});
+
       const project = await api.projects.createJson({
         title: step1Data.title,
         type: step1Data.type,
@@ -93,6 +111,9 @@ export default function NewProjectPage() {
         shoot_duration_days: step1Data.shoot_duration_days ? parseInt(step1Data.shoot_duration_days) : null,
         target_territory: step1Data.target_territory ? parseInt(step1Data.target_territory) : null,
         spend_estimates,
+        cast_crew_info,
+        production_timeline,
+        creative_staff_local_resident: residencyConfirmed,
       });
 
       if (budgetFile) {
@@ -312,6 +333,107 @@ export default function NewProjectPage() {
                 animate="center"
                 exit="exit"
                 transition={{ duration: 0.22 }}
+                className="glass-card p-6"
+              >
+                <p className="text-sm text-synergy-muted mb-4">
+                  Add cast and key production milestones — these populate the Cast and Schedule
+                  sections of your Business Plan and Pitch Deck automatically.
+                </p>
+
+                <p className="form-label mb-2">Cast</p>
+                <div className="space-y-2 mb-3">
+                  {cast.map((c, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input
+                        value={c.role}
+                        onChange={e => setCast(prev => prev.map((r, j) => j === i ? { ...r, role: e.target.value } : r))}
+                        placeholder="Role (e.g. Lead)"
+                        className="form-input flex-1"
+                      />
+                      <input
+                        value={c.name}
+                        onChange={e => setCast(prev => prev.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                        placeholder="Actor name"
+                        className="form-input flex-1"
+                      />
+                      <select
+                        value={c.status}
+                        onChange={e => setCast(prev => prev.map((r, j) => j === i ? { ...r, status: e.target.value } : r))}
+                        className="form-select w-32"
+                      >
+                        {CAST_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <button onClick={() => setCast(prev => prev.filter((_, j) => j !== i))}
+                        className="text-synergy-muted hover:text-synergy-red transition-colors text-xl leading-none w-6">×</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setCast(prev => [...prev, { role: '', name: '', status: 'Potential' }])}
+                  className="btn-secondary text-xs mb-6">
+                  + Add Cast Member
+                </button>
+
+                <p className="form-label mb-2">Production Timeline</p>
+                <div className="space-y-2 mb-3">
+                  {timeline.map((t, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input
+                        value={t.milestone}
+                        onChange={e => setTimeline(prev => prev.map((r, j) => j === i ? { ...r, milestone: e.target.value } : r))}
+                        placeholder="Milestone (e.g. Principal Photography)"
+                        className="form-input flex-1"
+                      />
+                      <input
+                        value={t.date}
+                        onChange={e => setTimeline(prev => prev.map((r, j) => j === i ? { ...r, date: e.target.value } : r))}
+                        type="date"
+                        className="form-input w-44"
+                      />
+                      <button onClick={() => setTimeline(prev => prev.filter((_, j) => j !== i))}
+                        className="text-synergy-muted hover:text-synergy-red transition-colors text-xl leading-none w-6">×</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setTimeline(prev => [...prev, { milestone: '', date: '' }])}
+                  className="btn-secondary text-xs mb-6">
+                  + Add Milestone
+                </button>
+
+                <label className="flex items-start gap-3 rounded-xl border border-synergy-border/50 bg-white/[0.03] p-4 cursor-pointer mb-6">
+                  <input
+                    type="checkbox"
+                    checked={residencyConfirmed}
+                    onChange={e => setResidencyConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded accent-synergy-cyan"
+                  />
+                  <span className="text-sm text-synergy-text">
+                    Principal cast, writer &amp; director are confirmed local / EEA tax residents
+                    <span className="block text-xs text-synergy-muted mt-1">
+                      Unlocks the creative-staff rebate eligibility in your financial model. Leave unchecked if residency isn&apos;t confirmed yet — you can update this later.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="flex justify-between">
+                  <button onClick={back} className="btn-secondary flex items-center gap-2">
+                    <ChevronLeftIcon className="h-4 w-4" /> Back
+                  </button>
+                  <button onClick={() => next()} className="btn-primary flex items-center gap-2">
+                    Continue <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div
+                key="s4"
+                custom={dir}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.22 }}
                 className="glass-card p-6 space-y-5"
               >
                 <div>
@@ -343,6 +465,9 @@ export default function NewProjectPage() {
                       ['Total budget', Number(step1Data.total_budget).toLocaleString('en-US', { style: 'currency', currency: step1Data.currency, maximumFractionDigits: 0 })],
                       ['Shoot location', step1Data.target_territory ? (territories.find(t => String(t.id) === step1Data.target_territory)?.name || '—') : 'Decide later'],
                       ['Spend categories', `${estimates.filter(e => e.category && e.amount).length} · ${spendTotal.toLocaleString('en-US', { style: 'currency', currency: step1Data.currency, maximumFractionDigits: 0 })}`],
+                      ['Cast attached', `${cast.filter(c => c.name.trim()).length}`],
+                      ['Milestones', `${timeline.filter(t => t.milestone.trim() && t.date.trim()).length}`],
+                      ['Residency confirmed', residencyConfirmed ? 'Yes' : 'Not yet'],
                     ].map(([k, v]) => (
                       <div key={k} className="flex justify-between text-xs">
                         <span className="text-synergy-muted">{k}</span>

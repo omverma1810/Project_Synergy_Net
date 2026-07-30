@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from .models import Project, Budget, BudgetLineItem
 from .serializers import (
     ProjectListSerializer,
+    ProjectCreateSerializer,
     ProjectDetailSerializer,
     BudgetSerializer,
     BudgetLineItemSerializer,
@@ -42,8 +43,16 @@ def _auto_populate_from_spend_estimates(project):
 
 
 class ProjectListCreateView(generics.ListCreateAPIView):
-    serializer_class = ProjectListSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        # ProjectListSerializer is a narrow read-only whitelist for the list view;
+        # using it for POST silently dropped synopsis/language/dates/territory/
+        # cast/timeline (accepted but never persisted, no error). Creation gets
+        # the full intake serializer instead.
+        if self.request.method == 'POST':
+            return ProjectCreateSerializer
+        return ProjectListSerializer
 
     def get_queryset(self):
         return Project.objects.filter(producer=self.request.user)
@@ -61,6 +70,14 @@ class ProjectListCreateView(generics.ListCreateAPIView):
             _auto_populate_from_spend_estimates(project)
             project.status = Project.Status.UPLOADED
             project.save(update_fields=['status'])
+
+    def create(self, request, *args, **kwargs):
+        # Respond with the full detail representation (budgets, target_territory_name,
+        # etc.) rather than echoing back the narrow create-serializer fields.
+        response = super().create(request, *args, **kwargs)
+        project = Project.objects.get(pk=response.data['id'])
+        response.data = ProjectDetailSerializer(project).data
+        return response
 
 
 class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):

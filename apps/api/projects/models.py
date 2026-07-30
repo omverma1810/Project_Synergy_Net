@@ -68,6 +68,13 @@ class Project(models.Model):
     # benchmarks so the model reflects real sales-agent quotes.
     revenue_overrides = models.JSONField(default=list, blank=True)
 
+    # Whether the producer has confirmed the principal cast/writer/director are
+    # Spain/EEA tax residents (or the equivalent local-residency requirement for
+    # the chosen territory). Drives the financial engine's creative-staff haircut
+    # classification — unconfirmed ATL creative spend is excluded from the rebate
+    # until this is set, matching the reference workbook's audit-ready stance.
+    creative_staff_local_resident = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

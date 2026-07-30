@@ -17,6 +17,7 @@ from analysis.financial_model import (
     HaircutCategory,
     IncentiveProgram,
     RevenueWindow,
+    budget_lines_from_django,
     build_financial_model,
     budget_sensitivity,
     classify_line,
@@ -27,6 +28,15 @@ from analysis.financial_model import (
     program_from_territory,
     project_revenue,
 )
+
+
+def _fake_line(description, amount, category="", is_local_eligible=False):
+    return SimpleNamespace(description=description, amount=Decimal(str(amount)), category=category, is_local_eligible=is_local_eligible)
+
+
+def _fake_budget(lines, residency_confirmed=False):
+    project = SimpleNamespace(creative_staff_local_resident=residency_confirmed)
+    return SimpleNamespace(project=project, line_items=SimpleNamespace(all=lambda: lines))
 
 GROSS = Decimal("4145000")
 ELIGIBLE = Decimal("2535000")
@@ -101,6 +111,41 @@ class HaircutEngineTests(unittest.TestCase):
             classify_line("Lead Actor", is_local_eligible=True),
             HaircutCategory.CREATIVE_STAFF_RESIDENT,
         )
+
+
+class ResidencyOverrideTests(unittest.TestCase):
+    def test_residency_unconfirmed_excludes_creative_staff(self):
+        budget = _fake_budget([
+            _fake_line("Lead Actor", 800000),
+            _fake_line("Local Gaffer", 70000),
+        ], residency_confirmed=False)
+        lines = budget_lines_from_django(budget)
+        self.assertEqual(compute_eligible_spend(lines), Decimal("70000"))  # only the crew line
+
+    def test_residency_confirmed_includes_creative_staff(self):
+        budget = _fake_budget([
+            _fake_line("Lead Actor", 800000),
+            _fake_line("Local Gaffer", 70000),
+        ], residency_confirmed=True)
+        lines = budget_lines_from_django(budget)
+        self.assertEqual(compute_eligible_spend(lines), Decimal("870000"))  # both now eligible
+
+    def test_residency_confirmed_does_not_widen_non_creative_lines(self):
+        # Unmatched/non-eligible categories must stay excluded regardless of the
+        # project-level residency flag -- only CREATIVE_STAFF_TBD is affected.
+        budget = _fake_budget([
+            _fake_line("Contingency", 250000),
+            _fake_line("Some Unrecognised Line Item", 10000),
+        ], residency_confirmed=True)
+        lines = budget_lines_from_django(budget)
+        self.assertEqual(compute_eligible_spend(lines), Decimal("0"))
+
+    def test_explicit_local_eligible_flag_still_works_without_residency(self):
+        budget = _fake_budget([
+            _fake_line("Lead Actor", 800000, is_local_eligible=True),
+        ], residency_confirmed=False)
+        lines = budget_lines_from_django(budget)
+        self.assertEqual(compute_eligible_spend(lines), Decimal("800000"))
 
 
 class RevenueScenarioTests(unittest.TestCase):

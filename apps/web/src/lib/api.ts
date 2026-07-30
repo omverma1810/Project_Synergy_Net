@@ -281,6 +281,7 @@ export interface ProjectDetail extends ProjectSummary {
   target_territory: number | null;
   target_territory_name?: string | null;
   revenue_overrides?: { name: string; floor: number; base: number; breakout: number }[];
+  creative_staff_local_resident?: boolean;
   budgets: Budget[];
 }
 
