@@ -10,10 +10,30 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
-import { api, ProjectDetail, Analysis, AnalysisResult, FinancialModel } from '@/lib/api';
+import { api, ProjectDetail, Analysis, AnalysisResult, FinancialModel, Territory } from '@/lib/api';
 import Layout from '@/components/Layout';
 
 const TABS = ['Overview', 'Budget', 'Analysis', 'Financials', 'Reports'];
+const CAST_STATUS_OPTIONS = ['Attached', 'In Talks', 'Potential'];
+
+interface CastRow { role: string; name: string; status: string; }
+interface TimelineRow { milestone: string; date: string; }
+
+function castRowsFromProject(project: ProjectDetail | null): CastRow[] {
+  const info = project?.cast_crew_info as { cast?: unknown } | undefined;
+  const cast = info?.cast;
+  if (!Array.isArray(cast)) return [];
+  return cast.map((c) => {
+    const row = c as { role?: string; name?: string; status?: string };
+    return { role: row.role || '', name: row.name || '', status: row.status || 'Attached' };
+  });
+}
+
+function timelineRowsFromProject(project: ProjectDetail | null): TimelineRow[] {
+  const tl = project?.production_timeline as Record<string, string> | undefined;
+  if (!tl || typeof tl !== 'object') return [];
+  return Object.entries(tl).map(([milestone, date]) => ({ milestone, date }));
+}
 
 const STATUS_BADGES: Record<string, string> = {
   DRAFT: 'badge-muted', UPLOADED: 'badge-cyan', ANALYZING: 'badge-orange',
@@ -47,6 +67,15 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const [editRev, setEditRev] = useState(false);
   const [revRows, setRevRows] = useState<{ name: string; floor: string; base: string; breakout: string }[]>([]);
   const [savingRev, setSavingRev] = useState(false);
+  const [territories, setTerritories] = useState<Territory[]>([]);
+  const [selectedTerritory, setSelectedTerritory] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [editDetails, setEditDetails] = useState(false);
+  const [detailsTerritory, setDetailsTerritory] = useState('');
+  const [detailsResidency, setDetailsResidency] = useState(false);
+  const [detailsCast, setDetailsCast] = useState<CastRow[]>([]);
+  const [detailsTimeline, setDetailsTimeline] = useState<TimelineRow[]>([]);
+  const [savingDetails, setSavingDetails] = useState(false);
 
   useEffect(() => {
     const pid = parseInt(id);
@@ -58,6 +87,10 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
       setAnalyses(a);
     }).finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    api.territories.list().then(setTerritories).catch(() => {});
+  }, []);
 
   const handleAnalyze = async () => {
     if (!project) return;
@@ -75,20 +108,28 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     }
   };
 
-  // Lazily load the financial model when the Financials tab is first opened.
+  // Load the financial model when the Financials tab is opened, and whenever the
+  // producer switches the preview territory or triggers a reload (revenue save,
+  // production-details save). Keyed on (activeTab, territory, reloadKey) rather
+  // than on finModel/finLoading to avoid re-fetch loops while still refetching
+  // on demand.
   useEffect(() => {
-    if (activeTab !== 3 || finModel || finLoading || finError) return;
+    if (activeTab !== 3) return;
     setFinLoading(true);
-    api.analysis.financialModel(parseInt(id))
+    setFinError('');
+    const params = selectedTerritory ? { territory: parseInt(selectedTerritory) } : undefined;
+    api.analysis.financialModel(parseInt(id), params)
       .then(setFinModel)
       .catch((e: unknown) => setFinError((e as Error).message || 'Could not build the financial model.'))
       .finally(() => setFinLoading(false));
-  }, [activeTab, id, finModel, finLoading, finError]);
+  }, [activeTab, id, selectedTerritory, reloadKey]);
+
+  const territoryParam = () => (selectedTerritory ? { territory: parseInt(selectedTerritory) } : undefined);
 
   const handleFinancialPdf = async () => {
     setFinPdf(true);
     try {
-      const blob = await api.analysis.financialModelPdf(parseInt(id));
+      const blob = await api.analysis.financialModelPdf(parseInt(id), territoryParam());
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -112,7 +153,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     setEditRev(true);
   };
 
-  const reloadModel = () => { setFinModel(null); setFinError(''); };
+  const reloadModel = () => setReloadKey(k => k + 1);
 
   const saveRevenue = async () => {
     setSavingRev(true);
@@ -174,9 +215,49 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   };
 
   const handleBusinessPlan = () =>
-    downloadPdf(() => api.analysis.businessPlanPdf(parseInt(id)), `synergy_business_plan_${id}.pdf`, setBizPdf, 'Business plan PDF ready');
+    downloadPdf(() => api.analysis.businessPlanPdf(parseInt(id), territoryParam()), `synergy_business_plan_${id}.pdf`, setBizPdf, 'Business plan PDF ready');
   const handlePitchDeck = () =>
-    downloadPdf(() => api.analysis.pitchDeckPdf(parseInt(id)), `synergy_pitch_deck_${id}.pdf`, setDeckPdf, 'Pitch deck PDF ready');
+    downloadPdf(() => api.analysis.pitchDeckPdf(parseInt(id), territoryParam()), `synergy_pitch_deck_${id}.pdf`, setDeckPdf, 'Pitch deck PDF ready');
+
+  const startEditDetails = () => {
+    setDetailsTerritory(project?.target_territory ? String(project.target_territory) : '');
+    setDetailsResidency(!!project?.creative_staff_local_resident);
+    const cast = castRowsFromProject(project);
+    setDetailsCast(cast.length ? cast : [{ role: '', name: '', status: 'Attached' }]);
+    const timeline = timelineRowsFromProject(project);
+    setDetailsTimeline(timeline.length ? timeline : [{ milestone: '', date: '' }]);
+    setEditDetails(true);
+  };
+
+  const saveDetails = async () => {
+    if (!project) return;
+    setSavingDetails(true);
+    try {
+      const castRows = detailsCast.filter(c => c.name.trim());
+      const cast_crew_info = castRows.length
+        ? { cast: castRows.map(c => ({ role: c.role || 'Role TBD', name: c.name, status: c.status })) }
+        : {};
+      const timelineRows = detailsTimeline.filter(t => t.milestone.trim() && t.date.trim());
+      const production_timeline = timelineRows.reduce<Record<string, string>>((acc, t) => {
+        acc[t.milestone] = t.date;
+        return acc;
+      }, {});
+      const updated = await api.projects.update(project.id, {
+        target_territory: detailsTerritory ? parseInt(detailsTerritory) : null,
+        creative_staff_local_resident: detailsResidency,
+        cast_crew_info,
+        production_timeline,
+      });
+      setProject(updated);
+      setEditDetails(false);
+      reloadModel();
+      toast.success('Production details updated');
+    } catch (e: unknown) {
+      toast.error((e as Error).message || 'Could not save production details');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
 
   const handleReport = async (format: 'PDF' | 'XLSX', analysisId: number) => {
     setGeneratingReport(format);
@@ -319,6 +400,160 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 </div>
               </div>
             )}
+
+            {/* Production Details — cast, schedule, territory, residency; captured
+                at intake but editable here so producers don't have to recreate
+                the project to update them. */}
+            <div className="glass-card p-6 lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="section-title">Production Details</h2>
+                {!editDetails && (
+                  <button onClick={startEditDetails} className="btn-secondary text-xs">Edit</button>
+                )}
+              </div>
+
+              {!editDetails ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-synergy-muted">Shoot Territory</span>
+                    <span className="text-synergy-text font-medium">
+                      {project.target_territory_name || 'Not set — pick one to model incentives'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-synergy-muted">Creative Staff Residency</span>
+                    <span className="text-synergy-text font-medium">
+                      {project.creative_staff_local_resident ? 'Confirmed' : 'Not confirmed'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-synergy-muted mb-2">Cast</p>
+                    {castRowsFromProject(project).length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {castRowsFromProject(project).map((c, i) => (
+                          <span key={i} className="badge-muted">{c.role}: {c.name} · {c.status}</span>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-synergy-subtle">No cast added yet.</p>}
+                  </div>
+                  <div>
+                    <p className="text-sm text-synergy-muted mb-2">Production Timeline</p>
+                    {timelineRowsFromProject(project).length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {timelineRowsFromProject(project).map((t, i) => (
+                          <span key={i} className="badge-muted">{t.milestone}: {t.date}</span>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-synergy-subtle">No milestones added yet.</p>}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div>
+                    <label className="form-label">Shoot Territory</label>
+                    <select
+                      value={detailsTerritory}
+                      onChange={e => setDetailsTerritory(e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="">Not set</option>
+                      {territories.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} — {parseFloat(t.base_percentage).toFixed(0)}%
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <label className="flex items-start gap-3 rounded-xl border border-synergy-border/50 bg-white/[0.03] p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={detailsResidency}
+                      onChange={e => setDetailsResidency(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded accent-synergy-cyan"
+                    />
+                    <span className="text-sm text-synergy-text">
+                      Principal cast, writer &amp; director confirmed local / EEA tax residents
+                      <span className="block text-xs text-synergy-muted mt-1">
+                        Unlocks the creative-staff rebate eligibility in the financial model.
+                      </span>
+                    </span>
+                  </label>
+
+                  <div>
+                    <p className="form-label mb-2">Cast</p>
+                    <div className="space-y-2 mb-2">
+                      {detailsCast.map((c, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                          <input
+                            value={c.role}
+                            onChange={e => setDetailsCast(prev => prev.map((r, j) => j === i ? { ...r, role: e.target.value } : r))}
+                            placeholder="Role (e.g. Lead)"
+                            className="form-input flex-1"
+                          />
+                          <input
+                            value={c.name}
+                            onChange={e => setDetailsCast(prev => prev.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                            placeholder="Actor name"
+                            className="form-input flex-1"
+                          />
+                          <select
+                            value={c.status}
+                            onChange={e => setDetailsCast(prev => prev.map((r, j) => j === i ? { ...r, status: e.target.value } : r))}
+                            className="form-select w-32"
+                          >
+                            {CAST_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          <button onClick={() => setDetailsCast(prev => prev.filter((_, j) => j !== i))}
+                            className="text-synergy-muted hover:text-synergy-red transition-colors text-xl leading-none w-6">×</button>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setDetailsCast(prev => [...prev, { role: '', name: '', status: 'Potential' }])}
+                      className="btn-secondary text-xs">
+                      + Add Cast Member
+                    </button>
+                  </div>
+
+                  <div>
+                    <p className="form-label mb-2">Production Timeline</p>
+                    <div className="space-y-2 mb-2">
+                      {detailsTimeline.map((t, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                          <input
+                            value={t.milestone}
+                            onChange={e => setDetailsTimeline(prev => prev.map((r, j) => j === i ? { ...r, milestone: e.target.value } : r))}
+                            placeholder="Milestone (e.g. Principal Photography)"
+                            className="form-input flex-1"
+                          />
+                          <input
+                            value={t.date}
+                            onChange={e => setDetailsTimeline(prev => prev.map((r, j) => j === i ? { ...r, date: e.target.value } : r))}
+                            type="date"
+                            className="form-input w-44"
+                          />
+                          <button onClick={() => setDetailsTimeline(prev => prev.filter((_, j) => j !== i))}
+                            className="text-synergy-muted hover:text-synergy-red transition-colors text-xl leading-none w-6">×</button>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setDetailsTimeline(prev => [...prev, { milestone: '', date: '' }])}
+                      className="btn-secondary text-xs">
+                      + Add Milestone
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <motion.button whileTap={{ scale: 0.98 }} onClick={saveDetails} disabled={savingDetails}
+                      className="btn-primary flex items-center gap-2 text-sm">
+                      {savingDetails && <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />}
+                      Save
+                    </motion.button>
+                    <button onClick={() => setEditDetails(false)} className="btn-secondary text-sm" disabled={savingDetails}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -412,6 +647,27 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         {activeTab === 3 && (
           <div className="space-y-6">
+            <div className="glass-card p-4 flex items-center gap-3 flex-wrap">
+              <label className="text-xs text-synergy-muted shrink-0">Preview territory</label>
+              <select
+                value={selectedTerritory}
+                onChange={e => setSelectedTerritory(e.target.value)}
+                className="form-select w-auto text-sm"
+              >
+                <option value="">
+                  Auto{finModel?.program?.territory ? ` (${finModel.program.territory})` : ''}
+                </option>
+                {territories.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — {parseFloat(t.base_percentage).toFixed(0)}%
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-synergy-subtle">
+                Compare incentive programs without changing the project&apos;s official shoot territory (set on the Overview tab).
+              </span>
+            </div>
+
             {finLoading && (
               <div className="grid sm:grid-cols-3 gap-4">
                 {[...Array(3)].map((_, i) => <div key={i} className="h-24 skeleton rounded-2xl" />)}
@@ -658,28 +914,70 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         )}
 
         {activeTab === 4 && (
-          <div className="glass-card p-6">
-            <h2 className="section-title mb-4">Generate Reports</h2>
-            {latestAnalysis ? (
-              <div className="flex gap-3 flex-wrap">
-                {(['PDF', 'XLSX'] as const).map(fmt => (
-                  <motion.button key={fmt}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    onClick={() => handleReport(fmt, latestAnalysis.id)}
-                    disabled={!!generatingReport}
-                    className="btn-secondary flex items-center gap-2"
-                  >
-                    {generatingReport === fmt
-                      ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
-                      : <DocumentArrowDownIcon className="h-4 w-4" />
-                    }
-                    Export {fmt}
-                  </motion.button>
-                ))}
+          <div className="space-y-6">
+            <div className="glass-card p-6">
+              <h2 className="section-title mb-1">Investor Deliverables</h2>
+              <p className="text-synergy-muted text-sm mb-4">
+                Generated live from this project&apos;s financial model — no analysis required.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleFinancialPdf} disabled={finPdf}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  {finPdf
+                    ? <span className="h-4 w-4 border-2 border-synergy-darker/30 border-t-synergy-darker rounded-full animate-spin" />
+                    : <DocumentArrowDownIcon className="h-4 w-4" />}
+                  Financial Model PDF
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleBusinessPlan} disabled={bizPdf}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  {bizPdf
+                    ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                    : <DocumentArrowDownIcon className="h-4 w-4" />}
+                  Full Business Plan PDF
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handlePitchDeck} disabled={deckPdf}
+                  className="btn-secondary flex items-center gap-2"
+                >
+                  {deckPdf
+                    ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                    : <DocumentArrowDownIcon className="h-4 w-4" />}
+                  Pitch Deck PDF
+                </motion.button>
               </div>
-            ) : (
-              <p className="text-synergy-muted text-sm">Run an analysis first to generate reports.</p>
-            )}
+            </div>
+
+            <div className="glass-card p-6">
+              <h2 className="section-title mb-1">Analysis Export</h2>
+              <p className="text-synergy-muted text-sm mb-4">Territory-ranking report exported from a completed analysis.</p>
+              {latestAnalysis ? (
+                <div className="flex gap-3 flex-wrap">
+                  {(['PDF', 'XLSX'] as const).map(fmt => (
+                    <motion.button key={fmt}
+                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => handleReport(fmt, latestAnalysis.id)}
+                      disabled={!!generatingReport}
+                      className="btn-secondary flex items-center gap-2"
+                    >
+                      {generatingReport === fmt
+                        ? <span className="h-4 w-4 border-2 border-synergy-muted/30 border-t-synergy-muted rounded-full animate-spin" />
+                        : <DocumentArrowDownIcon className="h-4 w-4" />
+                      }
+                      Export {fmt}
+                    </motion.button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-synergy-muted text-sm">Run an analysis first to export a territory-ranking report.</p>
+              )}
+            </div>
           </div>
         )}
       </motion.div>
