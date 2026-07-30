@@ -58,6 +58,10 @@
         .seg-shield { background: #10b981; } .seg-investor { background: #06b6d4; }
 
         .toc div { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #e2e8f0; font-size: 11px; }
+        /* Real cross-referenced page numbers (immune to content-overflow drift) —
+           WeasyPrint resolves target-counter() against the actual rendered layout. */
+        .toc a { text-decoration: none; color: #64748b; }
+        .toc a::after { content: target-counter(attr(href), page); }
         .callout { margin-top: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #06b6d4;
                    border-radius: 8px; padding: 10px 13px; font-size: 10px; color: #334155; }
         .disclaimer { margin-top: 22px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
@@ -83,19 +87,19 @@
     <div class="header-meta">Generated {{ generated_at|date:"F j, Y" }}<br>{{ currency }}</div></div>
 <h2>Contents</h2>
 <div class="toc">
-    <div><span>The Story</span><span class="muted">1</span></div>
-    <div><span>Budget</span><span class="muted">2</span></div>
-    <div><span>Financing Plan</span><span class="muted">3</span></div>
-    <div><span>Cast</span><span class="muted">4</span></div>
-    <div><span>Production Schedule</span><span class="muted">5</span></div>
-    <div><span>Financial Analysis</span><span class="muted">6</span></div>
-    <div><span>Distribution &amp; Recoupment</span><span class="muted">7</span></div>
-    <div><span>Investment Returns</span><span class="muted">8</span></div>
-    <div><span>The Team</span><span class="muted">9</span></div>
+    <div><span>The Story</span><a href="#sec-story" class="muted"></a></div>
+    <div><span>Budget</span><a href="#sec-budget" class="muted"></a></div>
+    <div><span>Financing Plan</span><a href="#sec-financing" class="muted"></a></div>
+    <div><span>Cast</span><a href="#sec-cast" class="muted"></a></div>
+    <div><span>Production Schedule</span><a href="#sec-schedule" class="muted"></a></div>
+    <div><span>Financial Analysis</span><a href="#sec-financial-analysis" class="muted"></a></div>
+    <div><span>Distribution &amp; Recoupment</span><a href="#sec-distribution" class="muted"></a></div>
+    <div><span>Investment Returns</span><a href="#sec-returns" class="muted"></a></div>
+    <div><span>The Team</span><a href="#sec-team" class="muted"></a></div>
 </div>
 
 <!-- ── The Story ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-story"></div>
 <div class="eyebrow">01 — Overview</div>
 <h1>The Story</h1>
 {% if project.synopsis %}<p class="lead">{{ project.synopsis }}</p>{% else %}<p class="muted">Synopsis to be provided.</p>{% endif %}
@@ -109,7 +113,7 @@
     hurdle is <strong>{{ currency }} {{ capital_stack.net_cash_exposure|floatformat:0|intcomma }}</strong>, below the gross budget.</div>
 
 <!-- ── Budget ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-budget"></div>
 <div class="eyebrow">02 — Budget</div>
 <h1>Budget</h1>
 <div class="hero">
@@ -131,7 +135,7 @@
     {{ currency }} {{ incentive.net_cash_exposure|floatformat:0|intcomma }}.</div>
 
 <!-- ── Financing Plan ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-financing"></div>
 <div class="eyebrow">03 — Financing</div>
 <h1>Financing Plan</h1>
 <table>
@@ -153,7 +157,7 @@
     ■ Investor capital — net exposure ({{ capital_stack.investor_pct|floatformat:1 }}%)</p>
 
 <!-- ── Cast ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-cast"></div>
 <div class="eyebrow">04 — Talent</div>
 <h1>Cast</h1>
 {% if cast %}
@@ -169,7 +173,7 @@
 {% else %}<p class="muted">Cast to be attached. Provide cast details during intake to populate this section.</p>{% endif %}
 
 <!-- ── Schedule ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-schedule"></div>
 <div class="eyebrow">05 — Schedule</div>
 <h1>Production Schedule</h1>
 {% if timeline %}
@@ -186,7 +190,7 @@
 {% endif %}
 
 <!-- ── Financial Analysis ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-financial-analysis"></div>
 <div class="eyebrow">06 — Financial Analysis</div>
 <h1>Financial Analysis</h1>
 <p class="muted">Three-scenario revenue view. Coverage = Net Project Revenue ÷ Net Cash Exposure
@@ -225,7 +229,7 @@
 {% endif %}
 
 <!-- ── Distribution & Recoupment ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-distribution"></div>
 <div class="eyebrow">07 — Distribution</div>
 <h1>Distribution &amp; Recoupment</h1>
 <p class="muted">Indicative release cascade. Actual timing is set by the distributor in consultation with the production.</p>
@@ -235,7 +239,7 @@
 </table>
 
 <!-- ── Investment Returns ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-returns"></div>
 <div class="eyebrow">08 — Returns</div>
 <h1>Investment Returns</h1>
 <p class="lead">Investors in the LLC receive 100% of Adjusted Gross Proceeds until they have recouped
@@ -248,7 +252,7 @@
     consult their own legal, accounting, and tax advisors.</div>
 
 <!-- ── Team ── -->
-<div class="page-break"></div>
+<div class="page-break" id="sec-team"></div>
 <div class="eyebrow">09 — Team</div>
 <h1>The Team</h1>
 <table>
